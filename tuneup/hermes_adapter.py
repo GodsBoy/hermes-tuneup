@@ -67,9 +67,15 @@ _REQUIRED_PARAMETERS: dict[tuple[str, str], tuple[str, ...]] = {
 
 _COMPRESSOR_METHODS = ("_derive_trigger", "_effective_threshold_cap", "_compute_threshold_tokens")
 
-# Files a window lookup may read from a profile's home; copied, never linked.
-_CACHE_FILES = ("context_length_cache.yaml",)
-_CACHE_DIRS = ("cache",)
+# The only files a window lookup reads from a profile's home. Copied one by one and
+# size-capped: a profile's cache/ directory can hold many gigabytes of unrelated data.
+_CACHE_FILES = (
+    "context_length_cache.yaml",
+    "cache/local_endpoint_probes.json",
+    "cache/openrouter_model_metadata.json",
+    "cache/endpoint_model_metadata.json",
+)
+_MAX_COPY_BYTES = 8 * 1024 * 1024
 
 
 class Unresolved(Exception):
@@ -159,11 +165,10 @@ def isolated_home(source_dir: Path | None = None) -> Iterator[Path]:
             if config.is_file():
                 shutil.copy2(config, temp / "config.yaml")
             for name in _CACHE_FILES:
-                if (source_dir / name).is_file():
-                    shutil.copy2(source_dir / name, temp / name)
-            for name in _CACHE_DIRS:
-                if (source_dir / name).is_dir():
-                    shutil.copytree(source_dir / name, temp / name, symlinks=False)
+                source = source_dir / name
+                if source.is_file() and not source.is_symlink() and source.stat().st_size <= _MAX_COPY_BYTES:
+                    (temp / name).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source, temp / name)
         token = set_hermes_home_override(temp)
         try:
             yield temp

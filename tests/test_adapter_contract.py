@@ -188,3 +188,23 @@ def test_missing_config_yields_defaults(hermes_home):
     (target / "SOUL.md").write_text("identity\n", encoding="utf-8")
     cfg = adapter.load_profile_config(target)
     assert cfg["compression"]["enabled"] is True
+
+
+def test_isolated_home_copies_only_the_small_allowlisted_cache_files(make_profile):
+    target = make_profile("alpha", "compression: {threshold: 0.6}\n")
+    (target / "cache" / "scratch").mkdir(parents=True)
+    (target / "cache" / "scratch" / "huge.bin").write_bytes(b"x" * 1024)
+    (target / "cache" / "openrouter_model_metadata.json").write_text("{}", encoding="utf-8")
+    (target / "context_length_cache.yaml").write_text("{}\n", encoding="utf-8")
+    with adapter.isolated_home(target) as home:
+        copied = sorted(str(p.relative_to(home)) for p in home.rglob("*") if p.is_file())
+    assert copied == ["cache/openrouter_model_metadata.json", "config.yaml", "context_length_cache.yaml"]
+
+
+def test_isolated_home_skips_oversized_cache_files(make_profile, monkeypatch):
+    target = make_profile("alpha", "compression: {threshold: 0.6}\n")
+    (target / "context_length_cache.yaml").write_text("x" * 2048, encoding="utf-8")
+    monkeypatch.setattr(adapter, "_MAX_COPY_BYTES", 1024)
+    with adapter.isolated_home(target) as home:
+        assert not (home / "context_length_cache.yaml").exists()
+        assert (home / "config.yaml").exists()
