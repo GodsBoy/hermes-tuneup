@@ -10,7 +10,7 @@ from __future__ import annotations
 
 def register(ctx) -> None:
     """Register tuneup's surfaces with Hermes."""
-    from .tuneup import cli, commands, tool
+    from .tuneup import cli, commands, guard, tool
 
     ctx.register_tool(
         name="tuneup_check",
@@ -31,3 +31,4 @@ def register(ctx) -> None:
         setup_fn=cli.setup,
         handler_fn=cli.handle,
     )
+    ctx.register_hook("pre_tool_call", guard.pre_tool_call)

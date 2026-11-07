@@ -10,4 +10,5 @@ requires_hermes: ">=0.23.0"
 tags: [compaction, cost, config, doctor]
 provides_tools:
   - tuneup_check
-provides_hooks: []
+provides_hooks:
+  - pre_tool_call

@@ -43,8 +43,9 @@ def cli_refusal() -> str | None:
     """None when a person is at a real terminal, else the reason the CLI fix will not run."""
     if agent_spawned():
         return (
-            "This command was started by the agent, not by you, so it will not change config. "
-            "Type the fix command yourself. Nothing changed."
+            "This shell carries the agent's session marker (HERMES_SESSION_ID), so the command was "
+            "started by the agent, not by you, and it will not change config. If you are at this "
+            "terminal yourself, run it from a fresh shell. Nothing changed."
         )
     if not (sys.stdin.isatty() and sys.stdout.isatty()):
         return "hermes tuneup fix needs a person at a real terminal to confirm. Nothing changed."
