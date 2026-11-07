@@ -13,6 +13,10 @@ from textwrap import dedent
 
 import pytest
 
+# Importing Hermes swaps the interpreter's site-packages for Hermes' own managed
+# environment, which need not ship PyYAML. Load the fixtures' YAML reader first.
+import yaml  # noqa: F401
+
 # Hermes treats any HERMES_HOME under ~/.hermes as a profile of the real install,
 # so a TMPDIR inside it (common on Hermes hosts) would expose the real profiles.
 _NATIVE_HOME = (Path.home() / ".hermes").resolve()
