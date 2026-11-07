@@ -46,8 +46,13 @@ jobs:
           uv sync --locked --python 3.14 --group dev
           uv pip install --python .venv/bin/python pyyaml==6.0.3
 
+      # Without a TMPDIR of its own, Hermes points temp files at
+      # ~/.hermes/cache/scratch, and the suite refuses to run inside a Hermes
+      # home. Hermes leaves a user-set TMPDIR alone.
       - name: Unit tests
         working-directory: plugin
+        env:
+          TMPDIR: ${{ runner.temp }}
         run: ../hermes-agent/.venv/bin/python -m pytest -q
 
       - name: Catalogue validation
