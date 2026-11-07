@@ -1,4 +1,4 @@
-"""U5: the /tuneup slash command report."""
+"""The /tuneup slash command report."""
 
 from fleetutil import busy_fleet
 from tuneup import commands

@@ -1,4 +1,4 @@
-"""U6: a confirmed fix applies one change safely, or changes nothing."""
+"""A confirmed fix applies one change safely, or changes nothing."""
 
 from __future__ import annotations
 

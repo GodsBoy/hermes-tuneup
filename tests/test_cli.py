@@ -1,4 +1,4 @@
-"""U5: hermes tuneup check and report."""
+"""The hermes tuneup check and report commands."""
 
 import argparse
 import json

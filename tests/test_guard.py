@@ -1,4 +1,4 @@
-"""U7: the agent cannot reach a fix through its own tools (R34, AE10)."""
+"""The agent's own tools are blocked from running a fix."""
 
 from __future__ import annotations
 

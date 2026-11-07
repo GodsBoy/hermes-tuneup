@@ -1,4 +1,4 @@
-"""The cap-clamp finding from the trigger explanation (R5) plus the four checks (R6 to R9)."""
+"""The cap-clamp finding from the trigger explanation plus the four checks."""
 
 from __future__ import annotations
 

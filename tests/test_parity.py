@@ -1,4 +1,4 @@
-"""U5: every surface shows the same codes, severities and trigger numbers."""
+"""Every surface shows the same codes, severities and trigger numbers."""
 
 import argparse
 import json

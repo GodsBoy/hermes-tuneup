@@ -1,4 +1,4 @@
-"""U3: per-profile routes with their real compaction triggers and plain explanations."""
+"""Per-profile routes with their real compaction triggers and plain explanations."""
 
 from __future__ import annotations
 

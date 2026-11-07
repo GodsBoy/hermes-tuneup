@@ -1,4 +1,4 @@
-"""U4: subagents running at high or extra-high reasoning effort (R9)."""
+"""Subagents running at high or extra-high reasoning effort."""
 
 import pytest
 

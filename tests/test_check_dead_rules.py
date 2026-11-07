@@ -1,4 +1,4 @@
-"""U4: model_thresholds rules that never apply to any route the profile runs (R6)."""
+"""Rules in model_thresholds that never apply to any route the profile runs."""
 
 from checkutil import run_check
 from tuneup.checks.dead_rules import check

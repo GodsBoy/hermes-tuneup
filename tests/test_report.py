@@ -1,4 +1,4 @@
-"""U3: the one core report every surface renders."""
+"""The one core report every surface renders."""
 
 from __future__ import annotations
 

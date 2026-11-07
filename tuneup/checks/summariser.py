@@ -1,4 +1,4 @@
-"""R7: a summariser window too small for the trigger it must summarise."""
+"""A summariser window too small for the trigger it must summarise."""
 
 from __future__ import annotations
 

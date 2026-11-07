@@ -1,4 +1,4 @@
-"""U4: proactive pruning on a prompt-cached subscription route (R8)."""
+"""Proactive pruning on a prompt-cached subscription route."""
 
 from checkutil import run_check
 from tuneup.checks.prune_cache import check

@@ -1,4 +1,4 @@
-"""R9: subagents running at high or extra-high reasoning effort."""
+"""Subagents running at high or extra-high reasoning effort."""
 
 from __future__ import annotations
 

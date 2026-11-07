@@ -1,4 +1,4 @@
-"""R8: proactive pruning on a prompt-cached subscription route."""
+"""Proactive pruning on a prompt-cached subscription route."""
 
 from __future__ import annotations
 

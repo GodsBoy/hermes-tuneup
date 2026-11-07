@@ -1,4 +1,4 @@
-"""U8: opt-in prediction receipts, metadata only."""
+"""Opt-in prediction receipts, metadata only."""
 
 from __future__ import annotations
 

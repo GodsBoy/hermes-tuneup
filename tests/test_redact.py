@@ -1,4 +1,4 @@
-"""U3: nothing secret reaches the report, whatever the config holds."""
+"""Nothing secret reaches the report, whatever the config holds."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""R5: an explicit threshold_tokens that pulls a route's trigger below its ratio trigger."""
+"""An explicit threshold_tokens that pulls a route's trigger below its ratio trigger."""
 
 from __future__ import annotations
 

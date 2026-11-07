@@ -1,4 +1,4 @@
-"""U4: an explicit threshold_tokens that pulls the trigger below the ratio trigger (R5)."""
+"""An explicit threshold_tokens that pulls the trigger below the ratio trigger."""
 
 from checkutil import run_check
 from tuneup.checks.cap_clamp import check

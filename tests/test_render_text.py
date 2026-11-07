@@ -1,4 +1,4 @@
-"""U5: the /tuneup and CLI text layout, including the messaging cap."""
+"""The /tuneup and CLI text layout, including the messaging cap."""
 
 from fleetutil import busy_fleet
 from tuneup import render_text, report

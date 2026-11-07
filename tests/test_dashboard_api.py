@@ -1,4 +1,4 @@
-"""U9: the pane's GET-only backend returns the core report and nothing else."""
+"""The pane's GET-only backend returns the core report and nothing else."""
 
 from __future__ import annotations
 

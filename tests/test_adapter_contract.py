@@ -1,4 +1,4 @@
-"""U2: the adapter reproduces Hermes' own numbers, offline, without writing anything."""
+"""The adapter reproduces Hermes' own numbers, offline, without writing anything."""
 
 from __future__ import annotations
 

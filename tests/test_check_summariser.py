@@ -1,4 +1,4 @@
-"""U4: a summariser too small for the trigger it must summarise (R7)."""
+"""A summariser too small for the trigger it must summarise."""
 
 from checkutil import run_check
 from tuneup.checks.summariser import check

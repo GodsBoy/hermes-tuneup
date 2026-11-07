@@ -1,4 +1,4 @@
-"""U1: the plugin loads, registers exactly what it declares, and the harness is isolated."""
+"""The plugin loads, registers exactly what it declares, and the harness is isolated."""
 
 from __future__ import annotations
 

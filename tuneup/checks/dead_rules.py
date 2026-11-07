@@ -1,4 +1,4 @@
-"""R6: model_thresholds rules that apply to no route the profile runs."""
+"""Rules in model_thresholds that apply to no route the profile runs."""
 
 from __future__ import annotations
 

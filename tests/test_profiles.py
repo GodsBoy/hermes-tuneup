@@ -1,4 +1,4 @@
-"""U2: profile discovery and read-only snapshots for the whole fleet."""
+"""Profile discovery and read-only snapshots for the whole fleet."""
 
 from __future__ import annotations
 
