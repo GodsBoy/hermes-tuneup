@@ -1,0 +1,12 @@
+name: hermes-tuneup
+version: "0.1.0"
+manifest_version: 2
+api_version: 1
+description: "Shows when compaction really fires on every profile and model route, flags settings that waste quota or break prompt caching, and fixes them only after you confirm, with a diff and a backup. Reads every profile's config.yaml; writes config only on a confirmed fix."
+author: GodsBoy
+license: MIT
+homepage: https://github.com/GodsBoy/hermes-tuneup
+requires_hermes: ">=0.23.0"
+tags: [compaction, cost, config, doctor]
+provides_tools: []
+provides_hooks: []

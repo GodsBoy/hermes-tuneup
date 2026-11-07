@@ -1,0 +1,11 @@
+[project]
+name = "hermes-tuneup"
+version = "0.1.0"
+description = "Compaction and cost advisor for Hermes Agent profiles"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "tests"]
+addopts = "-p no:cacheprovider"
