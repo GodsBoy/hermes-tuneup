@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-ORDER = {"high": 0, "medium": 1, "low": 2}
+from .severity import severity_counts, severity_rank
 
 
 def _active_entry(rep: dict) -> dict | None:
@@ -29,7 +29,7 @@ def finding_block(f: dict) -> str:
 def fleet_line(rep: dict) -> str:
     profiles = rep["profiles"]
     findings = [f for p in profiles for f in p.get("findings", [])]
-    counts = {s: sum(1 for f in findings if f["severity"] == s) for s in ORDER}
+    counts = severity_counts(findings)
     unresolved = sum(1 for p in profiles if p["status"] != "ok")
     extra = f", {unresolved} unreadable" if unresolved else ""
     def plural(n: int, word: str) -> str:
@@ -47,7 +47,7 @@ def render_active(rep: dict, cap: int | None = None) -> str:
     entry = _active_entry(rep)
     if entry is None:
         return "tuneup: no Hermes profiles found."
-    findings = sorted(entry.get("findings", []), key=lambda f: ORDER.get(f["severity"], 3))
+    findings = sorted(entry.get("findings", []), key=lambda f: severity_rank(f["severity"]))
     head, tail = header(entry), fleet_line(rep)
     if entry.get("receipts"):
         head += f"\nReceipts: {entry['receipts']['text']}"
@@ -79,7 +79,7 @@ def render_fleet(rep: dict) -> str:
                 continue
             detail = route["explain"] or route["note"] or route["status"]
             out.append(f"  {route['role']}: {route['model']} on {route['provider']} {detail}")
-        for f in sorted(entry.get("findings", []), key=lambda f: ORDER.get(f["severity"], 3)):
+        for f in sorted(entry.get("findings", []), key=lambda f: severity_rank(f["severity"])):
             out.append("  " + finding_block(f).replace("\n", "\n  "))
         if entry["status"] == "ok" and not entry.get("findings"):
             out.append("  No findings.")

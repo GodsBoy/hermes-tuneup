@@ -1,6 +1,6 @@
 """U5: the /tuneup and CLI text layout, including the messaging cap."""
 
-from fleetutil import BUSY, busy_fleet
+from fleetutil import busy_fleet
 from tuneup import render_text, report
 
 
@@ -25,9 +25,10 @@ def test_messaging_cap_drops_whole_low_findings_and_keeps_the_high_one(make_prof
     assert len(capped) <= len(full) - 10
     assert high["fix_command"] in capped
     assert "more, run hermes tuneup check" in capped
-    for line in capped.splitlines():
-        if line.strip().startswith("fix: "):
-            assert line.strip()[5:].split()[-1] in {f["code"] for f in rep["profiles"][0]["findings"]}
+    kept = {line.strip().split()[-1] for line in capped.splitlines() if line.strip().startswith("fix: ")}
+    dropped = {f["code"] for f in rep["profiles"][0]["findings"]} - kept
+    assert dropped, "the cap should have dropped at least one finding"
+    assert all(code not in capped for code in dropped)
 
 
 def test_clean_profile_says_no_findings_and_still_shows_the_trigger(make_profile):

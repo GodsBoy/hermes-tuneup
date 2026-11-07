@@ -6,6 +6,7 @@ import json
 
 from . import profiles, report
 from .redact import clean
+from .severity import severity_counts
 
 MAX_BYTES = 6000
 
@@ -59,7 +60,7 @@ def _digest(entry: dict) -> dict:
         "status": entry["status"],
         "note": entry["note"],
         "main_route": main.get("explain") or main.get("note", ""),
-        "finding_counts": {s: sum(1 for f in findings if f["severity"] == s) for s in ("high", "medium", "low")},
+        "finding_counts": severity_counts(findings),
         "top_finding": (
             {"severity": top["severity"], "summary": clean(top["summary"], 160), "fix_command": top["fix_command"]}
             if top
@@ -80,10 +81,8 @@ def _shape(rep: dict, scope: str, include: set[str]) -> dict:
         "truncated": False,
     }
     while len(json.dumps(out).encode("utf-8")) > MAX_BYTES and len(out["profiles"]) > 1:
-        idx = max(i for i, e in enumerate(out["profiles"]) if not e["active"]) if any(
-            not e["active"] for e in out["profiles"]
-        ) else len(out["profiles"]) - 1
-        out["profiles"].pop(idx)
+        non_active = [i for i, e in enumerate(out["profiles"]) if not e["active"]]
+        out["profiles"].pop(non_active[-1] if non_active else len(out["profiles"]) - 1)
         out["truncated"] = True
     if out["truncated"]:
         out["next"] = "Call again with scope=profile and a profile name for the rest."
@@ -107,5 +106,5 @@ def handle(args: dict | None = None, **_kwargs) -> str:
         else:
             rep = report.build_report(active=active, only=active)
         return json.dumps(_shape(rep, scope, include))
-    except Exception as exc:  # the agent loop must always get JSON back
+    except Exception as exc:
         return json.dumps({"error": f"tuneup could not build the report: {type(exc).__name__}", "read_only": True})

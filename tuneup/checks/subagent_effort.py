@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from hermes_constants import parse_reasoning_effort
 
+from ..config_access import raw_section, section
 from ..report import Finding
 from ..severity import COSTLY_EFFORTS, effect_timing
-from . import raw_section
 
 KEY = ["delegation", "reasoning_effort"]
 
@@ -19,8 +19,8 @@ def _level(raw) -> str | None:
 
 
 def _parent_level(config: dict, model: str) -> str:
-    agent = config.get("agent") if isinstance(config.get("agent"), dict) else {}
-    overrides = agent.get("reasoning_overrides") if isinstance(agent.get("reasoning_overrides"), dict) else {}
+    agent = section(config, "agent")
+    overrides = section(agent, "reasoning_overrides")
     if model in overrides:
         return _level(overrides[model]) or "medium"
     return _level(agent.get("reasoning_effort")) or "medium"
@@ -28,7 +28,7 @@ def _parent_level(config: dict, model: str) -> str:
 
 def check(snapshot, routes) -> list[Finding]:
     config = snapshot.config or {}
-    delegation = config.get("delegation") if isinstance(config.get("delegation"), dict) else {}
+    delegation = section(config, "delegation")
     main = next((r for r in routes if r.role == "main"), None)
     own = _level(delegation.get("reasoning_effort"))
     if own is not None:

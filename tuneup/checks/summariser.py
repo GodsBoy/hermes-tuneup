@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from .. import hermes_adapter as adapter
+from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding
 from ..routes import format_tokens
 from ..severity import effect_timing
-from . import raw_section
 
 KEY = ["auxiliary", "compression"]
 

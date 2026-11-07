@@ -18,6 +18,7 @@ from pathlib import Path
 
 from . import hermes_adapter as adapter
 from . import profiles, report
+from .config_access import dig
 from .redact import clean, clean_line
 from .report import Finding
 from .routes import build_routes
@@ -148,13 +149,6 @@ def write_backup(config_path: Path) -> Path:
     raise FixRefused("Could not create a unique backup name. Nothing changed.")
 
 
-def _resolved(config: dict, key_path: list) -> object:
-    node: object = config
-    for key in key_path:
-        node = node.get(key) if isinstance(node, dict) else None
-    return node
-
-
 def apply(plan: FixPlan) -> FixResult:
     """Write the previewed change if nothing moved underneath it, then read it back."""
     if _signature(plan.config_path) != plan.signature:
@@ -172,7 +166,7 @@ def apply(plan: FixPlan) -> FixResult:
     if original_mode is not None:
         os.chmod(plan.config_path, original_mode)
     after_config = adapter.load_profile_config(plan.profile_dir)
-    after_value = _resolved(after_config, plan.finding.key_path)
+    after_value = dig(after_config, *plan.finding.key_path)
     main = next((r for r in build_routes(after_config) if r.role == "main"), None)
     return FixResult(
         profile=plan.profile,

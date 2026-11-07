@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from . import hermes_adapter as adapter
+from .config_access import section as _section
 from .redact import clean
 
 
@@ -36,11 +37,6 @@ def format_tokens(n: int) -> str:
     return f"{round(n / 1000)}K"
 
 
-def _section(config: dict, key: str) -> dict:
-    value = config.get(key) if isinstance(config, dict) else None
-    return value if isinstance(value, dict) else {}
-
-
 def _main_identity(config: dict) -> tuple[str, str]:
     model = config.get("model")
     if isinstance(model, dict):
@@ -66,7 +62,7 @@ def summariser_identity(config: dict) -> tuple[str, str] | None:
     aux = _section(_section(config, "auxiliary"), "compression")
     model = str(aux.get("model") or "").strip()
     provider = str(aux.get("provider") or "auto").strip()
-    if not model or provider in ("main",):
+    if not model or provider == "main":
         return None
     main_model, main_provider = _main_identity(config)
     resolved_provider = main_provider if provider in ("", "auto") else provider

@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from .. import hermes_adapter as adapter
+from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding
 from ..routes import format_tokens
 from ..severity import effect_timing
-from . import raw_section
 
 KEY = ["compression", "model_thresholds"]
 CAVEAT = "cron jobs and /model switches are not checked"
@@ -53,7 +53,7 @@ def check(snapshot, routes) -> list[Finding]:
     if nested:
         proposed = {k: v for k, v in rules.items() if not isinstance(v, dict)}
         proposed.update(_flatten(nested))
-        findings.append(
+        return [
             Finding(
                 check="dead_rules",
                 severity="medium",
@@ -67,8 +67,7 @@ def check(snapshot, routes) -> list[Finding]:
                 proposed=proposed,
                 effect_timing=effect_timing(KEY),
             )
-        )
-        return findings
+        ]
     for key, value in rules.items():
         if not isinstance(value, (int, float)) or isinstance(value, bool) or _matches(str(key), candidates):
             continue

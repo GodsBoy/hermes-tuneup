@@ -13,8 +13,10 @@ from typing import Any, Callable
 
 from . import hermes_adapter as adapter
 from . import profiles as profiles_mod
+from .receipts import summary as receipts_summary
 from .redact import clean, scrub
 from .routes import Route, build_routes
+from .severity import severity_rank
 
 SCHEMA_VERSION = 1
 CANNOT_APPLY = "Read-only. Fixes are applied only when the user types the fix command shown with each finding."
@@ -78,8 +80,6 @@ def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: 
     route_list = build_routes(snapshot.config)
     entry["routes"] = [r.to_dict() for r in route_list]
     entry["findings"] = [f.to_dict() for f in findings_for(snapshot, active, checks, route_list)]
-    from .receipts import summary as receipts_summary
-
     entry["receipts"] = receipts_summary(snapshot.path)
     return entry
 
@@ -98,8 +98,7 @@ def findings_for(
     findings: list[Finding] = []
     for check in checks:
         findings.extend(check(snapshot, route_list))
-    order = {"high": 0, "medium": 1, "low": 2}
-    findings.sort(key=lambda f: (order.get(f.severity, 3), f.check))
+    findings.sort(key=lambda f: (severity_rank(f.severity), f.check))
     for f in findings:
         f.profile = snapshot.name
         f.code = finding_code(snapshot.name, f.check, f.key_path, f.current)

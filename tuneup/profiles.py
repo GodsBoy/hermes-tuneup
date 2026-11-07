@@ -21,7 +21,7 @@ class ProfileSnapshot:
 def _snapshot(name: str, path: Path) -> ProfileSnapshot:
     try:
         raw = adapter.load_raw_user_config(path)
-        config = adapter.load_profile_config(path)
+        config = adapter.load_profile_config(path, raw=raw)
     except adapter.Unresolved as exc:
         return ProfileSnapshot(name, path, None, None, "unresolved", str(exc))
     note = "" if (path / "config.yaml").is_file() else "no config.yaml (Hermes defaults)"
@@ -46,6 +46,14 @@ def find_profile(name: str) -> ProfileSnapshot | None:
         return None
     path = discovered.get(str(name).strip())
     return _snapshot(str(name).strip(), path) if path is not None and path.is_dir() else None
+
+
+def profile_names() -> set[str]:
+    """Discovered profile names only, without reading any config."""
+    try:
+        return {name for name, path in adapter.discover_profiles() if path.is_dir()}
+    except adapter.Unresolved:
+        return set()
 
 
 def active_profile() -> str:

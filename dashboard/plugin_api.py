@@ -34,7 +34,6 @@ router = APIRouter()
 @router.get("/report")
 def report(profile: str | None = None) -> dict:
     """The core report (already redacted), for every profile or one discovered profile."""
-    profiles = _core("profiles")
-    if profile is not None and profiles.find_profile(profile) is None:
+    if profile is not None and profile not in _core("profiles").profile_names():
         raise HTTPException(status_code=400, detail="unknown profile")
     return _core("report").build_report(only=profile)

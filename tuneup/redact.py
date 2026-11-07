@@ -22,21 +22,26 @@ _SECRET_PATTERNS = (
 )
 
 
-def clean(value: object, limit: int = MAX_LEN) -> str:
-    """A config-derived string that is safe to show to a person or a model."""
+def _sanitise(value: object) -> str:
+    """Control characters removed and secret-shaped text replaced; the one place the patterns apply."""
     text = _CONTROL.sub("", str(value if value is not None else ""))
     for pattern in _SECRET_PATTERNS:
         text = pattern.sub("[redacted]", text)
-    text = " ".join(text.split())
+    return text
+
+
+def _truncate(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def clean(value: object, limit: int = MAX_LEN) -> str:
+    """A config-derived string that is safe to show to a person or a model."""
+    return _truncate(" ".join(_sanitise(value).split()), limit)
 
 
 def clean_line(value: object, limit: int = 200) -> str:
     """Like clean(), but keeps spacing, for diff lines whose indentation carries meaning."""
-    text = _CONTROL.sub("", str(value if value is not None else ""))
-    for pattern in _SECRET_PATTERNS:
-        text = pattern.sub("[redacted]", text)
-    return text if len(text) <= limit else text[: limit - 3] + "..."
+    return _truncate(_sanitise(value), limit)
 
 
 def url(value: object) -> str:

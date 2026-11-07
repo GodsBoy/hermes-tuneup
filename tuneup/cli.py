@@ -34,13 +34,19 @@ def exit_code(rep: dict) -> int:
     return EXIT_CLEAN
 
 
-def _check(args) -> int:
-    name = getattr(args, "profile", None)
-    if name and profiles.find_profile(name) is None:
+def _unknown_profile(name: str | None) -> bool:
+    if name and name not in profiles.profile_names():
         print(f"tuneup: no profile named {name!r}")
+        return True
+    return False
+
+
+def _check(args) -> int:
+    name = args.profile
+    if _unknown_profile(name):
         return EXIT_UNRESOLVED
     rep = report.build_report(only=name)
-    print(json.dumps(rep, indent=2) if getattr(args, "json", False) else render_text.render_fleet(rep))
+    print(json.dumps(rep, indent=2) if args.json else render_text.render_fleet(rep))
     return exit_code(rep)
 
 
@@ -69,12 +75,11 @@ def _fix(args) -> int:
 
 
 def _report(args) -> int:
-    name = getattr(args, "profile", None)
-    if name and profiles.find_profile(name) is None:
-        print(f"tuneup: no profile named {name!r}")
+    name = args.profile
+    if _unknown_profile(name):
         return EXIT_UNRESOLVED
     rep = report.build_report(only=name, checks=[])
-    if getattr(args, "json", False):
+    if args.json:
         print(json.dumps({p["name"]: p.get("receipts") for p in rep["profiles"]}, indent=2))
     else:
         print(render_text.render_receipts(rep))

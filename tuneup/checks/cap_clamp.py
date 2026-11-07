@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding
 from ..routes import format_tokens
@@ -25,7 +26,7 @@ def check(snapshot, routes) -> list[Finding]:
         return []
     worst = min(clamped, key=lambda r: r.trigger / r.factors["ratio_trigger"])
     severity = "medium" if worst.trigger < worst.factors["ratio_trigger"] / 2 else "low"
-    current = (snapshot.raw or {}).get("compression", {}).get("threshold_tokens", worst.factors["cap"])
+    current = raw_section(snapshot, "compression").get("threshold_tokens", worst.factors["cap"])
     summary = (
         f"threshold_tokens caps compaction at {format_tokens(worst.trigger)} on {clean(worst.model)}, "
         f"instead of about {format_tokens(worst.factors['ratio_trigger'])} from the threshold ratio. "

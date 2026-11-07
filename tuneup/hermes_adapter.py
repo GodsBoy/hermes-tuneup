@@ -24,7 +24,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Iterator
 
-# module -> names tuneup calls. Signature checks below cover the parameters we pass.
+from .config_access import section as _section
+
 REQUIRED_ENTRY_POINTS: dict[str, tuple[str, ...]] = {
     "agent.agent_init": ("_parse_compression_config", "_compressor_max_tokens"),
     "agent.context_compressor": (
@@ -200,11 +201,14 @@ def load_raw_user_config(profile_dir: Path) -> dict:
             raise Unresolved(f"invalid YAML in config.yaml: {type(exc).__name__}") from None
 
 
-def load_profile_config(profile_dir: Path) -> dict:
-    """The profile's effective config merged over Hermes' defaults, read without side effects."""
+def load_profile_config(profile_dir: Path, raw: dict | None = None) -> dict:
+    """The profile's effective config merged over Hermes' defaults, read without side effects.
+
+    Pass the already-loaded user layer as `raw` to avoid reading the profile twice.
+    """
     from hermes_cli.config import DEFAULT_CONFIG
 
-    return _deep_merge(DEFAULT_CONFIG, load_raw_user_config(profile_dir))
+    return _deep_merge(DEFAULT_CONFIG, load_raw_user_config(profile_dir) if raw is None else raw)
 
 
 def discover_profiles() -> list[tuple[str, Path]]:
@@ -229,11 +233,6 @@ def rule_rank(key: str, model: str, provider: str) -> tuple[int, int] | None:
     from agent.context_compressor import _model_threshold_key_rank
 
     return _model_threshold_key_rank(str(key), model or "", (provider or "").strip().lower())
-
-
-def _section(config: dict, key: str) -> dict:
-    value = config.get(key) if isinstance(config, dict) else None
-    return value if isinstance(value, dict) else {}
 
 
 def resolve_window(config: dict, model: str, provider: str, *, main_route: bool = True) -> Window:

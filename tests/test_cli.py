@@ -36,11 +36,15 @@ def test_check_exits_two_when_a_profile_is_unresolved(make_profile, capsys):
 
 
 def test_check_json_matches_the_core_report(make_profile, capsys):
+    from tuneup import report
+
     busy_fleet(make_profile, extra=1)
     code, out = _run(["check", "--json"], capsys)
     data = json.loads(out)
-    assert data["schema_version"] == 1
-    assert {p["name"] for p in data["profiles"]} == {"default", "spare0"}
+    core = report.build_report()
+    codes = lambda rep: sorted((p["name"], f["code"]) for p in rep["profiles"] for f in p["findings"])  # noqa: E731
+    assert data["schema_version"] == core["schema_version"]
+    assert codes(data) == codes(core) and codes(data)
 
 
 def test_check_named_profile(make_profile, capsys):

@@ -74,8 +74,6 @@ def handle(
 
 
 def make_handler(ctx, recorder=None):
-    """Bind the plugin context so the handler can ask for confirmation, see cron runs and toggle receipts."""
-
     def handler(raw_args: str = "", *, session_id: str = "", platform: str = "", source=None) -> str:
         return handle(raw_args, ctx=ctx, recorder=recorder, session_id=session_id, platform=platform, source=source)
 

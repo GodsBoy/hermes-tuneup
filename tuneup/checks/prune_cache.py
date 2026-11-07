@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from ..config_access import raw_section, section
 from ..redact import clean
 from ..report import Finding
 from ..severity import effect_timing
-from . import raw_section
 
 KEY = ["compression", "proactive_prune_tokens"]
 
@@ -21,7 +21,7 @@ def is_cached_subscription(provider: str) -> bool:
 
 
 def check(snapshot, routes) -> list[Finding]:
-    value = (snapshot.config or {}).get("compression", {}).get("proactive_prune_tokens", 0)
+    value = section(snapshot.config or {}, "compression").get("proactive_prune_tokens", 0)
     try:
         value = int(value or 0)
     except (TypeError, ValueError):
