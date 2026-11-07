@@ -18,7 +18,7 @@ from pathlib import Path
 
 from . import hermes_adapter as adapter
 from . import profiles, report
-from .redact import clean
+from .redact import clean, clean_line
 from .report import Finding
 from .routes import build_routes
 
@@ -79,7 +79,7 @@ def _redacted_diff(before: str, after: str) -> str:
         match = _SECRET_LINE.match(line)
         if match and not _PLAIN_SCALAR.match(match.group("value")):
             line = match.group("head") + "[redacted]"
-        lines.append(clean(line, 200))
+        lines.append(clean_line(line))
     return "\n".join(lines) or "(no textual change)"
 
 

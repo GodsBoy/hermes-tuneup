@@ -239,3 +239,19 @@ def test_cli_fix_applies_after_typed_yes(make_profile, monkeypatch, capsys):
     assert cli.handle(parser.parse_args(["fix", _code()])) == 0
     assert _config(home)["compression"].get("proactive_prune_tokens", 0) == 0
     assert "Backup:" in capsys.readouterr().out
+
+
+def test_preview_diff_keeps_yaml_indentation(make_profile):
+    make_profile(
+        "default",
+        f"""
+        model:
+          default: claude-opus-5-5
+          provider: {SUB}
+        compression:
+          proactive_prune_tokens: 48000
+        """,
+    )
+    plan = fixes.prepare(_code(), profile="default", active="default")
+    assert "-  proactive_prune_tokens: 48000" in plan.diff
+    assert "+  proactive_prune_tokens: 0" in plan.diff

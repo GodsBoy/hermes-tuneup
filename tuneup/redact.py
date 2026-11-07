@@ -31,6 +31,14 @@ def clean(value: object, limit: int = MAX_LEN) -> str:
     return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
+def clean_line(value: object, limit: int = 200) -> str:
+    """Like clean(), but keeps spacing, for diff lines whose indentation carries meaning."""
+    text = _CONTROL.sub("", str(value if value is not None else ""))
+    for pattern in _SECRET_PATTERNS:
+        text = pattern.sub("[redacted]", text)
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 def url(value: object) -> str:
     """Scheme and host (with port) only: no user info, path or query."""
     raw = str(value or "").strip()
