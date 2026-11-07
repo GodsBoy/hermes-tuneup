@@ -10,4 +10,24 @@ from __future__ import annotations
 
 def register(ctx) -> None:
     """Register tuneup's surfaces with Hermes."""
-    return None
+    from .tuneup import cli, commands, tool
+
+    ctx.register_tool(
+        name="tuneup_check",
+        toolset="tuneup",
+        schema=tool.SCHEMA,
+        handler=tool.handle,
+        description=tool.SCHEMA["description"],
+    )
+    ctx.register_command(
+        "tuneup",
+        handler=commands.handle,
+        description="When compaction really fires, and what wastes quota",
+        args_hint="[fix <code> | receipts on|off]",
+    )
+    ctx.register_cli_command(
+        name="tuneup",
+        help="Compaction and cost advisor for every profile",
+        setup_fn=cli.setup,
+        handler_fn=cli.handle,
+    )

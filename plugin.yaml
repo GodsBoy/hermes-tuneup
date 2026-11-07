@@ -8,5 +8,6 @@ license: MIT
 homepage: https://github.com/GodsBoy/hermes-tuneup
 requires_hermes: ">=0.23.0"
 tags: [compaction, cost, config, doctor]
-provides_tools: []
+provides_tools:
+  - tuneup_check
 provides_hooks: []
