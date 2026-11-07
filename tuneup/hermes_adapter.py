@@ -42,6 +42,7 @@ REQUIRED_ENTRY_POINTS: dict[str, tuple[str, ...]] = {
     ),
     "hermes_cli.config_effective": ("load_user_config_effective",),
     "hermes_cli.profiles": ("list_profile_names", "get_profile_dir", "get_active_profile_name"),
+    "hermes_constants": ("parse_reasoning_effort",),
     "tools.delegate_tool": ("_child_compression_cap_tokens",),
 }
 
@@ -334,6 +335,14 @@ def delegation_cap(raw: Any) -> int | None:
     from tools.delegate_tool import _child_compression_cap_tokens
 
     return _child_compression_cap_tokens(raw)
+
+
+def parse_reasoning_effort(raw: Any) -> dict | None:
+    """Hermes' reading of a reasoning effort: None if unset or unknown, {"enabled": False} if disabled."""
+    _require()
+    from hermes_constants import parse_reasoning_effort as _parse
+
+    return _parse(raw)
 
 
 def minimum_context_length() -> int:

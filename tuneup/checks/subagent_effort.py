@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from hermes_constants import parse_reasoning_effort
-
+from .. import hermes_adapter as adapter
 from ..config_access import raw_section, section
 from ..report import Finding
 from ..severity import COSTLY_EFFORTS, effect_timing
@@ -11,11 +10,15 @@ from ..severity import COSTLY_EFFORTS, effect_timing
 KEY = ["delegation", "reasoning_effort"]
 
 
-def _level(raw) -> str | None:
-    parsed = parse_reasoning_effort(raw)
+def _effort(parsed: dict | None) -> str | None:
+    """The effort level a parsed setting sends, or None when it is unset, unknown or disabled."""
     if not parsed or parsed.get("enabled") is False:
         return None
     return str(parsed.get("effort") or "").strip().lower() or None
+
+
+def _level(raw) -> str | None:
+    return _effort(adapter.parse_reasoning_effort(raw))
 
 
 def _parent_level(config: dict, model: str) -> str:
@@ -30,7 +33,13 @@ def check(snapshot, routes) -> list[Finding]:
     config = snapshot.config or {}
     delegation = section(config, "delegation")
     main = next((r for r in routes if r.role == "main"), None)
-    own = _level(delegation.get("reasoning_effort"))
+    raw = delegation.get("reasoning_effort")
+    # Same reading as Hermes' _child_reasoning: a YAML false counts as set, and a disabled
+    # value is an explicit override that turns subagent thinking off rather than inheriting.
+    parsed = adapter.parse_reasoning_effort(raw) if (raw or raw is False) else None
+    if parsed is not None and parsed.get("enabled") is False:
+        return []
+    own = _effort(parsed)
     if own is not None:
         level, source = own, "delegation.reasoning_effort"
     else:
