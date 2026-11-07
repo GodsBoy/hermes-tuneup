@@ -64,3 +64,10 @@ demo/out/
 *.log
 tmp/
 scratch/
+
+# Local agent context and Compound Engineering artefacts (not for publication)
+.compound-engineering/
+tasks/
+PROGRESS.md
+TASK.md
+BRIEF.md

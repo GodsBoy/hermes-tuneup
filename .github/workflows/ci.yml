@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # The Hermes Agent commit tuneup is tested against. Keep in step with
+  # requires_hermes in plugin.yaml.
+  HERMES_REF: ca4360692055bdb4df3a695c164646e528891da8
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # The plugin and Hermes sit side by side, so validating the plugin
+      # never scans the Hermes tree.
+      - name: Check out the plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      # Hermes refuses wheel and sdist builds, so it cannot be pip-installed
+      # from git. Set it up the way its own CI does: a checkout of the pinned
+      # commit and `uv sync --locked`, with the dev group for pytest. The
+      # tests also read fixtures with PyYAML, which Hermes does not ship.
+      - name: Check out Hermes Agent at the pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: NousResearch/hermes-agent
+          ref: ${{ env.HERMES_REF }}
+          path: hermes-agent
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # 8.2.0
+        with:
+          version: "0.12.13"
+
+      - name: Install Hermes Agent
+        working-directory: hermes-agent
+        run: |
+          uv sync --locked --python 3.14 --group dev
+          uv pip install --python .venv/bin/python pyyaml==6.0.3
+
+      # Without a TMPDIR of its own, Hermes points temp files at
+      # ~/.hermes/cache/scratch, and the suite refuses to run inside a Hermes
+      # home. Hermes leaves a user-set TMPDIR alone.
+      - name: Unit tests
+        working-directory: plugin
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: ../hermes-agent/.venv/bin/python -m pytest -q
+
+      - name: Catalogue validation
+        working-directory: plugin
+        run: ../hermes-agent/.venv/bin/hermes plugins validate . --install-deps

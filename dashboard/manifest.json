@@ -1,0 +1,7 @@
+{
+  "name": "hermes-tuneup",
+  "label": "tuneup",
+  "description": "When compaction really fires on every profile, and what wastes quota",
+  "version": "0.1.0",
+  "api": "plugin_api.py"
+}
