@@ -108,10 +108,8 @@ def findings_for(
 
 
 def default_checks() -> list[Check]:
-    try:
-        from .checks import ALL_CHECKS
-    except ImportError:
-        return []
+    from .checks import ALL_CHECKS  # deferred: the check modules import this one
+
     return list(ALL_CHECKS)
 
 

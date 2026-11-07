@@ -1,4 +1,4 @@
-"""U5: the read-only tuneup_check agent tool."""
+"""The read-only tuneup_check agent tool."""
 
 import json
 
@@ -52,3 +52,20 @@ def test_internal_failure_still_returns_json(make_profile, monkeypatch):
     monkeypatch.setattr(tool.report, "build_report", boom)
     out = json.loads(tool.handle({}))
     assert out["error"].startswith("tuneup could not build the report")
+
+
+def test_oversized_all_scope_drops_other_profiles_first_and_says_so(make_profile, monkeypatch):
+    busy_fleet(make_profile, extra=9)
+    monkeypatch.setattr(tool, "MAX_BYTES", 1500)
+    out = json.loads(tool.handle({"scope": "all"}))
+    assert out["truncated"] is True
+    assert "scope=profile" in out["next"]
+    assert any(p["active"] for p in out["profiles"])
+    assert len(out["profiles"]) < 10
+
+
+def test_include_given_as_one_string_is_read_as_one_section(make_profile):
+    busy_fleet(make_profile, extra=0)
+    entry = json.loads(tool.handle({"include": "findings"}))["profiles"][0]
+    assert entry["findings"]
+    assert "routes" not in entry

@@ -93,7 +93,8 @@ def handle(args: dict | None = None, **_kwargs) -> str:
     """Always a JSON string, including on failure."""
     args = args or {}
     scope = str(args.get("scope") or "active")
-    include = set(args.get("include") or ["routes", "findings"])
+    include = args.get("include") or ["routes", "findings"]
+    include = {include} if isinstance(include, str) else set(include)
     try:
         active = profiles.active_profile()
         if scope == "profile":
