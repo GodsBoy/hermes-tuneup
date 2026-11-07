@@ -77,3 +77,19 @@ def test_a_dotted_key_stored_as_a_nested_mapping_is_flattened(make_profile):
 
 def test_no_rules_means_no_finding(make_profile):
     assert run_check(check, make_profile, "model: {default: claude-opus-5-5, provider: anthropic}\n") == []
+
+
+def test_two_dead_rules_get_distinct_fix_codes(make_profile):
+    from tuneup import profiles, report
+
+    make_profile(
+        "default",
+        """
+        model: {default: claude-opus-5-5, provider: anthropic}
+        compression:
+          model_thresholds: {"llama-9": 0.7, "mistral-7": 0.6, "claude-opus": 0.5}
+        """,
+    )
+    found = report.findings_for(profiles.find_profile("default"), "default", checks=[check])
+    assert sorted(f.extra["rule"] for f in found) == ["llama-9", "mistral-7"]
+    assert len({f.code for f in found}) == 2

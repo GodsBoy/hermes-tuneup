@@ -101,7 +101,8 @@ def findings_for(
     findings.sort(key=lambda f: (severity_rank(f.severity), f.check))
     for f in findings:
         f.profile = snapshot.name
-        f.code = finding_code(snapshot.name, f.check, f.key_path, f.current)
+        # The proposed value is part of the code, so two findings on one key (two dead rules) stay distinct.
+        f.code = finding_code(snapshot.name, f.check, f.key_path, [f.current, f.proposed])
         f.fix_command = fix_command(f.code, snapshot.name, active)
     return findings
 
