@@ -36,10 +36,12 @@ REQUIRED_ENTRY_POINTS: dict[str, tuple[str, ...]] = {
         "get_model_context_length",
         "DEFAULT_FALLBACK_CONTEXT",
         "DEFAULT_CONTEXT_LENGTHS",
+        "MINIMUM_CONTEXT_LENGTH",
         "_longest_key_match",
     ),
     "hermes_cli.config_effective": ("load_user_config_effective",),
     "hermes_cli.profiles": ("list_profile_names", "get_profile_dir", "get_active_profile_name"),
+    "tools.delegate_tool": ("_child_compression_cap_tokens",),
 }
 
 _REQUIRED_PARAMETERS: dict[tuple[str, str], tuple[str, ...]] = {
@@ -320,3 +322,19 @@ def preview_trigger(config: dict, model: str, provider: str, window: int) -> Tri
         matched_rule=best[1] if best else None,
         floor_applied=float(effective) > float(base),
     )
+
+
+def delegation_cap(raw: Any) -> int | None:
+    """Hermes' validation of delegation.compression_threshold_tokens (an int >= 16000, else no cap)."""
+    _require()
+    from tools.delegate_tool import _child_compression_cap_tokens
+
+    return _child_compression_cap_tokens(raw)
+
+
+def minimum_context_length() -> int:
+    """The smallest window Hermes accepts for a summariser."""
+    _require()
+    from agent.model_metadata import MINIMUM_CONTEXT_LENGTH
+
+    return int(MINIMUM_CONTEXT_LENGTH)

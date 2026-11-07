@@ -40,6 +40,7 @@ import agent.model_metadata  # noqa: E402,F401
 import hermes_cli.config  # noqa: E402,F401
 import hermes_cli.config_effective  # noqa: E402,F401
 import hermes_cli.profiles  # noqa: E402,F401
+import tools.delegate_tool  # noqa: E402,F401
 
 
 @pytest.fixture(autouse=True)
