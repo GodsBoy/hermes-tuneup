@@ -32,8 +32,11 @@ def fleet_line(rep: dict) -> str:
     counts = {s: sum(1 for f in findings if f["severity"] == s) for s in ORDER}
     unresolved = sum(1 for p in profiles if p["status"] != "ok")
     extra = f", {unresolved} unreadable" if unresolved else ""
+    def plural(n: int, word: str) -> str:
+        return f"{n} {word}" + ("" if n == 1 else "s")
+
     return (
-        f"Fleet: {len(profiles)} profiles{extra}, {len(findings)} findings "
+        f"Fleet: {plural(len(profiles), 'profile')}{extra}, {plural(len(findings), 'finding')} "
         f"({counts['high']} high, {counts['medium']} medium, {counts['low']} low). "
         "Run hermes tuneup check for details."
     )

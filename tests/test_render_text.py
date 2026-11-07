@@ -35,3 +35,9 @@ def test_clean_profile_says_no_findings_and_still_shows_the_trigger(make_profile
     text = render_text.render_active(report.build_report(active="default"))
     assert "compacts at about 500K" in text
     assert "No findings" in text
+
+
+def test_fleet_line_uses_singular_for_one(make_profile):
+    make_profile("default", "model: {default: claude-opus-5-5, provider: anthropic}\ndelegation: {reasoning_effort: high}\n")
+    text = render_text.render_active(report.build_report(active="default"))
+    assert text.splitlines()[-1].startswith("Fleet: 1 profile, 1 finding (")
