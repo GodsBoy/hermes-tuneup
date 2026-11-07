@@ -24,7 +24,10 @@ class Route:
     note: str = ""
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        """Serialised for a report: every config-derived string passes through the redactor."""
+        out = asdict(self)
+        out["model"], out["provider"], out["note"] = clean(self.model), clean(self.provider), clean(self.note, 200)
+        return out
 
 
 def format_tokens(n: int) -> str:
@@ -84,11 +87,11 @@ def _summariser_route(config: dict) -> Route | None:
         else:
             window = adapter.resolve_window(config, model, provider, main_route=False)
     except (adapter.Unresolved, TypeError, ValueError) as exc:
-        return Route("summariser", clean(model), clean(provider), status="unresolved", note=clean(exc, 200))
+        return Route("summariser", model, provider, status="unresolved", note=str(exc))
     return Route(
         "summariser",
-        clean(model),
-        clean(provider),
+        model,
+        provider,
         window=window.tokens,
         window_source=window.source,
         window_assumed=window.assumed,
@@ -113,7 +116,7 @@ def _explain(window: adapter.Window, trigger: int, pct: float, factors: dict) ->
 
 
 def _route(role: str, model: str, provider: str, config: dict, *, ceiling: int | None, extra_cap: int | None) -> Route:
-    name, prov = clean(model), clean(provider)
+    name, prov = model, provider
     if not model:
         return Route(role, name, prov, status="unresolved", note="no model configured")
     if not _section(config, "compression").get("enabled", True):
@@ -128,7 +131,7 @@ def _route(role: str, model: str, provider: str, config: dict, *, ceiling: int |
             route_config = {**config, "compression": compression}
         preview = adapter.preview_trigger(route_config, model, provider, window.tokens)
     except adapter.Unresolved as exc:
-        return Route(role, name, prov, status="unresolved", note=clean(exc, 200))
+        return Route(role, name, prov, status="unresolved", note=str(exc))
     trigger = preview.tokens
     applied_ceiling = ceiling if ceiling is not None and ceiling < trigger else None
     if applied_ceiling is not None:

@@ -41,3 +41,32 @@ def test_control_characters_are_stripped_and_length_is_limited():
 def test_url_is_reduced_to_scheme_and_host():
     assert redact.url("https://user:pw@proxy.example:8443/v1?key=abc") == "https://proxy.example:8443"
     assert redact.url("") == ""
+
+
+def test_secrets_inside_a_finding_proposed_change_are_redacted(make_profile):
+    make_profile(
+        "default",
+        """
+        model: {default: claude-opus-5-5, provider: anthropic}
+        auxiliary:
+          compression: {provider: openai-codex, model: gpt-6.1-sol, api_key: sk-aux-secret-111, base_url: "https://u:p@aux.example/v1"}
+        """,
+    )
+    rep = report.build_report(active="default")
+    findings = rep["profiles"][0]["findings"]
+    assert any(f["check"] == "summariser" for f in findings)
+    text = json.dumps(rep)
+    assert "sk-aux-secret-111" not in text
+    assert "u:p@" not in text and "aux.example/v1" not in text
+
+
+def test_scrub_redacts_secret_keys_and_cleans_strings():
+    out = redact.scrub({"api_key": "abc", "nested": {"token": "t", "model": "gpt\x00-6"}, "list": ["sk-abcdefgh12"]})
+    assert out == {"api_key": "[redacted]", "nested": {"token": "[redacted]", "model": "gpt-6"}, "list": ["[redacted]"]}
+
+
+def test_scrub_keeps_numbers_under_token_named_keys():
+    assert redact.scrub({"proactive_prune_tokens": 48000, "threshold_tokens": None}) == {
+        "proactive_prune_tokens": 48000,
+        "threshold_tokens": None,
+    }

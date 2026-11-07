@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from . import hermes_adapter as adapter
 from . import profiles as profiles_mod
-from .redact import clean
+from .redact import clean, scrub
 from .routes import Route, build_routes
 
 SCHEMA_VERSION = 1
@@ -41,12 +41,12 @@ class Finding:
             "profile": self.profile,
             "check": self.check,
             "severity": self.severity,
-            "summary": self.summary,
-            "evidence": self.evidence,
-            "proposed_change": {"key_path": self.key_path, "from": self.current, "to": self.proposed},
+            "summary": clean(self.summary, 600),
+            "evidence": scrub(self.evidence),
+            "proposed_change": {"key_path": scrub(self.key_path), "from": scrub(self.current), "to": scrub(self.proposed)},
             "effect_timing": self.effect_timing,
             "fix_command": self.fix_command,
-            **({"extra": self.extra} if self.extra else {}),
+            **({"extra": scrub(self.extra)} if self.extra else {}),
         }
 
 
