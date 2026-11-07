@@ -21,7 +21,7 @@ def register(ctx) -> None:
     )
     ctx.register_command(
         "tuneup",
-        handler=commands.handle,
+        handler=commands.make_handler(ctx),
         description="When compaction really fires, and what wastes quota",
         args_hint="[fix <code> | receipts on|off]",
     )

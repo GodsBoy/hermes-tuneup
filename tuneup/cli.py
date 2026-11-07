@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from . import profiles, render_text, report
+from . import confirm, fixes, profiles, render_text, report
 
 EXIT_CLEAN, EXIT_HIGH, EXIT_UNRESOLVED = 0, 1, 2
 
@@ -14,6 +14,9 @@ def setup(parser) -> None:
     check = subs.add_parser("check", help="Show when compaction fires on every profile and what to fix")
     check.add_argument("--profile", help="Only this profile")
     check.add_argument("--json", action="store_true", help="Machine-readable report")
+    fix = subs.add_parser("fix", help="Apply one finding's fix after you confirm it at this terminal")
+    fix.add_argument("code", help="The six-character code shown with the finding")
+    fix.add_argument("--profile", help="The profile the finding belongs to (default: the active profile)")
     parser.set_defaults(func=handle)
 
 
@@ -38,9 +41,35 @@ def _check(args) -> int:
     return exit_code(rep)
 
 
+def _fix(args) -> int:
+    refusal = confirm.cli_refusal()
+    if refusal:
+        print(refusal)
+        return EXIT_UNRESOLVED
+    active = profiles.active_profile()
+    try:
+        plan = fixes.prepare(args.code, profile=getattr(args, "profile", None) or active, active=active)
+    except fixes.FixRefused as exc:
+        print(exc)
+        return EXIT_UNRESOLVED
+    print(confirm.question(plan))
+    if input("Type yes to apply: ").strip().lower() != "yes":
+        print("Nothing changed.")
+        return EXIT_CLEAN
+    try:
+        result = fixes.apply(plan)
+    except fixes.FixRefused as exc:
+        print(exc)
+        return EXIT_UNRESOLVED
+    print(fixes.describe(result))
+    return EXIT_CLEAN if result.read_back_ok else EXIT_HIGH
+
+
 def handle(args) -> int:
     sub = getattr(args, "tuneup_command", None) or "check"
     if sub == "check":
         return _check(args)
-    print("Usage: hermes tuneup check [--profile NAME] [--json]")
+    if sub == "fix":
+        return _fix(args)
+    print("Usage: hermes tuneup check [--profile NAME] [--json] | hermes tuneup fix CODE [--profile NAME]")
     return EXIT_UNRESOLVED

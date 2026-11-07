@@ -77,6 +77,21 @@ def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: 
         return entry
     route_list = build_routes(snapshot.config)
     entry["routes"] = [r.to_dict() for r in route_list]
+    entry["findings"] = [f.to_dict() for f in findings_for(snapshot, active, checks, route_list)]
+    return entry
+
+
+def findings_for(
+    snapshot: profiles_mod.ProfileSnapshot,
+    active: str,
+    checks: list[Check] | None = None,
+    route_list: list[Route] | None = None,
+) -> list[Finding]:
+    """The profile's findings with codes and fix commands, raw values intact for the fix flow."""
+    if snapshot.status != "ok" or snapshot.config is None:
+        return []
+    checks = default_checks() if checks is None else checks
+    route_list = build_routes(snapshot.config) if route_list is None else route_list
     findings: list[Finding] = []
     for check in checks:
         findings.extend(check(snapshot, route_list))
@@ -86,8 +101,7 @@ def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: 
         f.profile = snapshot.name
         f.code = finding_code(snapshot.name, f.check, f.key_path, f.current)
         f.fix_command = fix_command(f.code, snapshot.name, active)
-    entry["findings"] = [f.to_dict() for f in findings]
-    return entry
+    return findings
 
 
 def default_checks() -> list[Check]:

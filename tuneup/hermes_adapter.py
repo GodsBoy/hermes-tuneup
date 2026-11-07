@@ -343,3 +343,45 @@ def minimum_context_length() -> int:
     from agent.model_metadata import MINIMUM_CONTEXT_LENGTH
 
     return int(MINIMUM_CONTEXT_LENGTH)
+
+
+@contextmanager
+def profile_home(profile_dir: Path) -> Iterator[Path]:
+    """Point Hermes' config writer at a real profile home, for a confirmed fix only."""
+    from hermes_constants import reset_hermes_home_override, set_hermes_home_override
+
+    token = set_hermes_home_override(profile_dir)
+    try:
+        yield profile_dir
+    finally:
+        reset_hermes_home_override(token)
+
+
+def is_managed() -> bool:
+    """True when an administrator manages this config and Hermes refuses user writes."""
+    from hermes_cli.config import is_managed as _is_managed
+
+    try:
+        return bool(_is_managed())
+    except Exception:
+        return False
+
+
+def write_value(key_path: list, value: Any) -> None:
+    """Set one key on a fresh read of the current home's config.yaml and save it through Hermes.
+
+    Must run inside isolated_home() or profile_home(); the whole raw dict is round-tripped so
+    dotted and colon-bearing keys such as "openai-codex:gpt-5.6" stay intact.
+    """
+    from hermes_cli.config import read_raw_config, save_config
+
+    config = read_raw_config()
+    node = config
+    for key in key_path[:-1]:
+        child = node.get(key)
+        if not isinstance(child, dict):
+            child = {}
+            node[key] = child
+        node = child
+    node[key_path[-1]] = copy.deepcopy(value)
+    save_config(config)
