@@ -1,8 +1,11 @@
-"""A pre_tool_call hook so the agent cannot run a tuneup fix through its own tools.
+"""A pre_tool_call hook that stops the agent's own tools from running a tuneup fix.
 
 The CLI fix also refuses inside agent-launched commands (confirm.cli_refusal);
 this hook is the second layer. It is a pure string check: no I/O, never raises,
 because Hermes blocks the tool if a pre_tool_call callback fails or hangs.
+
+Being a text match, it is a guard rail, not a sandbox: a command assembled at
+run time (a variable or command substitution) can get past it.
 """
 
 from __future__ import annotations
@@ -38,7 +41,9 @@ def _strings(value, depth: int = 0):
 
 
 def _normalise(text: str) -> str:
-    return re.sub(r"[\s'\"`\\]+", " ", text.lower())
+    # A quote or backslash inside a word is a shell no-op (tune""up, tun\eup), so join the word first.
+    joined = re.sub(r"(?<=\w)['\"`\\]+(?=\w)", "", text.lower())
+    return re.sub(r"[\s'\"`\\]+", " ", joined)
 
 
 def invokes_fix(text: str) -> bool:
