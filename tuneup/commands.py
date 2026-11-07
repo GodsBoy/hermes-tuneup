@@ -44,7 +44,23 @@ def _fix(code: str | None, ctx, platform: str, source) -> str:
         return str(exc)
 
 
-def handle(raw_args: str = "", *, ctx=None, session_id: str = "", platform: str = "", source=None, **_kw) -> str:
+def _receipts(arg: str | None, recorder) -> str:
+    if recorder is None:
+        return "Receipts are not available on this surface."
+    if arg not in ("on", "off"):
+        return f"Receipts are {'on' if recorder.enabled() else 'off'}. Use /tuneup receipts on or /tuneup receipts off."
+    recorder.set_enabled(arg == "on")
+    if arg == "on":
+        return (
+            "Receipts are on for this profile. tuneup now records, locally and as metadata only, when each "
+            "compaction fires and the cache-read share of prompt tokens. Turn off with /tuneup receipts off."
+        )
+    return "Receipts are off for this profile. Existing records stay until you delete plugin-data/hermes-tuneup."
+
+
+def handle(
+    raw_args: str = "", *, ctx=None, recorder=None, session_id: str = "", platform: str = "", source=None, **_kw
+) -> str:
     parts = (raw_args or "").split()
     sub = parts[0].lower() if parts else ""
     if sub in ("", "report"):
@@ -52,14 +68,16 @@ def handle(raw_args: str = "", *, ctx=None, session_id: str = "", platform: str 
         return render_text.render_active(rep, cap=_cap_for(platform))
     if sub == "fix":
         return _fix(parts[1] if len(parts) > 1 else None, ctx, platform, source)
+    if sub == "receipts":
+        return _receipts(parts[1].lower() if len(parts) > 1 else None, recorder)
     return USAGE
 
 
-def make_handler(ctx):
-    """Bind the plugin context so the handler can ask for confirmation and see cron runs."""
+def make_handler(ctx, recorder=None):
+    """Bind the plugin context so the handler can ask for confirmation, see cron runs and toggle receipts."""
 
     def handler(raw_args: str = "", *, session_id: str = "", platform: str = "", source=None) -> str:
-        return handle(raw_args, ctx=ctx, session_id=session_id, platform=platform, source=source)
+        return handle(raw_args, ctx=ctx, recorder=recorder, session_id=session_id, platform=platform, source=source)
 
     return handler
 

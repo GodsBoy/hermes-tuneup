@@ -10,7 +10,9 @@ from __future__ import annotations
 
 def register(ctx) -> None:
     """Register tuneup's surfaces with Hermes."""
-    from .tuneup import cli, commands, guard, tool
+    from .tuneup import cli, commands, guard, receipts, tool
+
+    recorder = receipts.Recorder(ctx)
 
     ctx.register_tool(
         name="tuneup_check",
@@ -21,7 +23,7 @@ def register(ctx) -> None:
     )
     ctx.register_command(
         "tuneup",
-        handler=commands.make_handler(ctx),
+        handler=commands.make_handler(ctx, recorder),
         description="When compaction really fires, and what wastes quota",
         args_hint="[fix <code> | receipts on|off]",
     )
@@ -32,3 +34,5 @@ def register(ctx) -> None:
         handler_fn=cli.handle,
     )
     ctx.register_hook("pre_tool_call", guard.pre_tool_call)
+    ctx.register_hook("post_api_request", recorder.on_api_request)
+    ctx.register_hook("post_compaction", recorder.on_compaction)

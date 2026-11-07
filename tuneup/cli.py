@@ -1,4 +1,4 @@
-"""`hermes tuneup check|report`: the fleet view for the terminal and CI."""
+"""`hermes tuneup check|report|fix`: the fleet view, receipts and confirmed fixes for the terminal."""
 
 from __future__ import annotations
 
@@ -14,6 +14,9 @@ def setup(parser) -> None:
     check = subs.add_parser("check", help="Show when compaction fires on every profile and what to fix")
     check.add_argument("--profile", help="Only this profile")
     check.add_argument("--json", action="store_true", help="Machine-readable report")
+    rep = subs.add_parser("report", help="Show prediction receipts: predicted against actual compaction")
+    rep.add_argument("--profile", help="Only this profile")
+    rep.add_argument("--json", action="store_true", help="Machine-readable receipts")
     fix = subs.add_parser("fix", help="Apply one finding's fix after you confirm it at this terminal")
     fix.add_argument("code", help="The six-character code shown with the finding")
     fix.add_argument("--profile", help="The profile the finding belongs to (default: the active profile)")
@@ -65,11 +68,26 @@ def _fix(args) -> int:
     return EXIT_CLEAN if result.read_back_ok else EXIT_HIGH
 
 
+def _report(args) -> int:
+    name = getattr(args, "profile", None)
+    if name and profiles.find_profile(name) is None:
+        print(f"tuneup: no profile named {name!r}")
+        return EXIT_UNRESOLVED
+    rep = report.build_report(only=name, checks=[])
+    if getattr(args, "json", False):
+        print(json.dumps({p["name"]: p.get("receipts") for p in rep["profiles"]}, indent=2))
+    else:
+        print(render_text.render_receipts(rep))
+    return EXIT_CLEAN
+
+
 def handle(args) -> int:
     sub = getattr(args, "tuneup_command", None) or "check"
     if sub == "check":
         return _check(args)
+    if sub == "report":
+        return _report(args)
     if sub == "fix":
         return _fix(args)
-    print("Usage: hermes tuneup check [--profile NAME] [--json] | hermes tuneup fix CODE [--profile NAME]")
+    print("Usage: hermes tuneup check|report [--profile NAME] [--json] | hermes tuneup fix CODE [--profile NAME]")
     return EXIT_UNRESOLVED

@@ -78,6 +78,9 @@ def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: 
     route_list = build_routes(snapshot.config)
     entry["routes"] = [r.to_dict() for r in route_list]
     entry["findings"] = [f.to_dict() for f in findings_for(snapshot, active, checks, route_list)]
+    from .receipts import summary as receipts_summary
+
+    entry["receipts"] = receipts_summary(snapshot.path)
     return entry
 
 

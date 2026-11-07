@@ -46,6 +46,8 @@ def render_active(rep: dict, cap: int | None = None) -> str:
         return "tuneup: no Hermes profiles found."
     findings = sorted(entry.get("findings", []), key=lambda f: ORDER.get(f["severity"], 3))
     head, tail = header(entry), fleet_line(rep)
+    if entry.get("receipts"):
+        head += f"\nReceipts: {entry['receipts']['text']}"
     blocks = [finding_block(f) for f in findings] or ["No findings: this profile's compaction settings look right."]
 
     def assemble(kept: list[str], dropped: int) -> str:
@@ -81,3 +83,12 @@ def render_fleet(rep: dict) -> str:
         out.append("")
     out.append(fleet_line(rep))
     return "\n".join(out)
+
+
+def render_receipts(rep: dict) -> str:
+    """One receipts summary per profile, for hermes tuneup report."""
+    lines = []
+    for entry in rep["profiles"]:
+        text = (entry.get("receipts") or {}).get("text") or entry.get("note") or entry["status"]
+        lines.append(f"{entry['name']}: {text}")
+    return "\n".join(lines) or "tuneup: no Hermes profiles found."
