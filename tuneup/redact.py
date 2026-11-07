@@ -58,7 +58,10 @@ def url(value: object) -> str:
     return f"{parts.scheme}://{host}{port}" if parts.scheme and host else "[redacted]"
 
 
-_SECRET_KEY = re.compile(r"(?i)(key|token|secret|password|passwd|auth|header|cookie|credential|base_url|url|env)")
+# Words that mark a config key as holding a secret. The report scrubber and the fix
+# preview diff both build their patterns from this one list.
+SECRET_KEY_WORDS = r"key|token|secret|password|passwd|auth|header|cookie|credential|url|env"
+_SECRET_KEY = re.compile(rf"(?i)({SECRET_KEY_WORDS})")
 
 
 def scrub(value: object) -> object:

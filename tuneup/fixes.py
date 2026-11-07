@@ -19,13 +19,18 @@ from pathlib import Path
 from . import hermes_adapter as adapter
 from . import profiles, report
 from .config_access import dig
-from .redact import clean, clean_line
+from .redact import SECRET_KEY_WORDS, clean, clean_line, scrub
 from .report import Finding
 from .routes import build_routes
 
 NO_SUCH_CODE = "No finding with that code. Run /tuneup to see current codes."
-_SECRET_LINE = re.compile(
-    r"^(?P<head>[ +\-]\s*[\w.\-\"']*(?:key|token|secret|password|auth|url)[\w.\-\"']*\s*:\s*)(?P<value>.+)$",
+_SECRET_NAME = r"[\w.\-\"']*(?:" + SECRET_KEY_WORDS + r")[\w.\-\"']*"
+# A block-style line (optionally a list item) whose key names a secret: its whole value goes.
+_SECRET_LINE = re.compile(r"^(?P<head>[ +\-]\s*(?:-\s+)*" + _SECRET_NAME + r"\s*:\s*)(?P<value>.+)$", re.IGNORECASE)
+# A pair inside a flow mapping ({api_key: x, name: y}): the value runs to the next comma or brace.
+_SECRET_PAIR = re.compile(
+    r"(?P<head>[{,]\s*" + _SECRET_NAME + r"\s*:\s*)"
+    r"(?P<value>'(?:[^']|'')*'|\"(?:[^\"\\]|\\.)*\"|[^,}\]]+)",
     re.IGNORECASE,
 )
 _PLAIN_SCALAR = re.compile(r"^(?:-?\d+(?:\.\d+)?|null|~|true|false)\s*$", re.IGNORECASE)
@@ -72,11 +77,17 @@ def _signature(path: Path) -> tuple:
     return (st.st_mtime_ns, st.st_size, hashlib.sha256(data).hexdigest())
 
 
+def _redact_value(match: re.Match) -> str:
+    value = match.group("value")
+    return match.group(0) if _PLAIN_SCALAR.match(value) else match.group("head") + "[redacted]"
+
+
 def _redacted_diff(before: str, after: str) -> str:
     lines = []
     for line in difflib.unified_diff(before.splitlines(), after.splitlines(), "before", "after", lineterm="", n=1):
         if line.startswith(("---", "+++", "@@")):
             continue
+        line = _SECRET_PAIR.sub(_redact_value, line)
         match = _SECRET_LINE.match(line)
         if match and not _PLAIN_SCALAR.match(match.group("value")):
             line = match.group("head") + "[redacted]"
@@ -165,9 +176,7 @@ def apply(plan: FixPlan) -> FixResult:
         ) from None
     if original_mode is not None:
         os.chmod(plan.config_path, original_mode)
-    after_config = adapter.load_profile_config(plan.profile_dir)
-    after_value = dig(after_config, *plan.finding.key_path)
-    main = next((r for r in build_routes(after_config) if r.role == "main"), None)
+    after_value, main_route, read_back_ok = _read_back(plan)
     return FixResult(
         profile=plan.profile,
         key=".".join(str(k) for k in plan.finding.key_path),
@@ -175,20 +184,35 @@ def apply(plan: FixPlan) -> FixResult:
         after=after_value,
         backup=backup,
         config_path=plan.config_path,
-        main_route=main.explain if main is not None else "",
+        main_route=main_route,
         effect_timing=plan.effect_timing,
-        read_back_ok=after_value == plan.finding.proposed,
+        read_back_ok=read_back_ok,
     )
+
+
+def _read_back(plan: FixPlan) -> tuple[object, str, bool]:
+    """What Hermes now reads for the key, the main route's new trigger, and whether it matches.
+
+    Never raises: the write has landed, so a failed read must not hide the backup path.
+    """
+    try:
+        after_config = adapter.load_profile_config(plan.profile_dir)
+        after_value = dig(after_config, *plan.finding.key_path)
+        main = next((r for r in build_routes(after_config) if r.role == "main"), None)
+    except Exception:
+        return plan.finding.proposed, "", False
+    return after_value, main.explain if main is not None else "", after_value == plan.finding.proposed
 
 
 def describe(result: FixResult) -> str:
     lines = [
-        f"Applied to profile {result.profile}: {result.key} changed from {clean(result.before)} to {clean(result.after)}.",
+        f"Applied to profile {result.profile}: {result.key} changed from {clean(scrub(result.before), 400)} "
+        f"to {clean(scrub(result.after), 400)}.",
         f"Backup: {result.backup} (restore with: cp {result.backup} {result.config_path}).",
     ]
     if result.main_route:
         lines.append(f"Main route now {result.main_route}.")
     if not result.read_back_ok:
-        lines.append("Warning: reading the value back through Hermes did not match what was written; check the file.")
+        lines.append("Warning: reading the value back through Hermes did not confirm what was written; check the file.")
     lines.append(f"Takes effect: {result.effect_timing}.")
     return "\n".join(lines)
