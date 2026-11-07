@@ -13,11 +13,33 @@ from textwrap import dedent
 
 import pytest
 
+# Hermes treats any HERMES_HOME under ~/.hermes as a profile of the real install,
+# so a TMPDIR inside it (common on Hermes hosts) would expose the real profiles.
+_NATIVE_HOME = (Path.home() / ".hermes").resolve()
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+# Hermes runs plugins with its source root on sys.path; an editable install may
+# lag behind top-level modules added later, so mirror the runtime layout here.
+import hermes_constants  # noqa: E402
+
+_HERMES_ROOT = str(Path(hermes_constants.__file__).resolve().parent)
+if _HERMES_ROOT not in sys.path:
+    sys.path.append(_HERMES_ROOT)
+
+# Import Hermes once, under the environment the run started with. A first import
+# after a test has pointed HERMES_HOME at a temp dir makes Hermes treat that dir
+# as a new data root and re-provision its dependencies.
+import agent.agent_init  # noqa: E402,F401
+import agent.context_compressor  # noqa: E402,F401
+import agent.model_metadata  # noqa: E402,F401
+import hermes_cli.config  # noqa: E402,F401
+import hermes_cli.config_effective  # noqa: E402,F401
+import hermes_cli.profiles  # noqa: E402,F401
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +47,9 @@ def hermes_home(tmp_path, monkeypatch):
     """Point HERMES_HOME at a fresh temp directory for every test."""
     home = tmp_path / ".hermes"
     home.mkdir()
+    assert not home.resolve().is_relative_to(_NATIVE_HOME), (
+        "pytest's temp dir is inside ~/.hermes; rerun with TMPDIR=/tmp so tests cannot see real profiles"
+    )
     monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.delenv("HERMES_SESSION_ID", raising=False)
     yield home
