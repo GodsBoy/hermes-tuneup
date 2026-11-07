@@ -1,0 +1,66 @@
+# Compound Engineering working files (plans, brainstorms, ideation, solutions, review notes)
+.context/
+docs/brainstorms/
+docs/plans/
+docs/ideation/
+docs/solutions/
+docs/residual-review-findings/
+todos/
+
+# Agent and editor state
+.claude/
+.codex/
+.cursor/
+.devin/
+.hermes/
+.codegraph/
+.lfg/
+CLAUDE.local.md
+AGENTS.local.md
+*.local.md
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node (Desktop pane)
+node_modules/
+*.tsbuildinfo
+.vite/
+.turbo/
+
+# Demo and media scratch
+demo/raw/
+demo/out/
+*.mov
+*.mp4
+!demo/final/*.mp4
+
+# Logs and scratch
+*.log
+tmp/
+scratch/
