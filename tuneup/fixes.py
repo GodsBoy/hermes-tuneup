@@ -95,7 +95,24 @@ def _redacted_diff(before: str, after: str) -> str:
     return "\n".join(lines) or "(no textual change)"
 
 
-def _find(code: str, profile: str, active: str) -> tuple[profiles.ProfileSnapshot, Finding]:
+def _find_in_fleet(code: str, active: str) -> tuple[profiles.ProfileSnapshot, Finding]:
+    """A code hashes its profile's name, so it names one profile. Two profiles sharing a code
+    would be a hash collision, which is refused rather than guessed."""
+    matches = [(s, f) for s in profiles.read_fleet() for f in report.findings_for(s, active) if f.code == code]
+    owners = sorted({snapshot.name for snapshot, _ in matches})
+    if len(owners) > 1:
+        raise FixRefused(
+            f"Code {code} matches findings on profiles {', '.join(owners)}, so tuneup will not guess which one "
+            "to change. Use /tuneup fix inside the profile you mean. Nothing changed."
+        )
+    if not matches:
+        raise FixRefused(NO_SUCH_CODE)
+    return matches[0]
+
+
+def _find(code: str, profile: str | None, active: str) -> tuple[profiles.ProfileSnapshot, Finding]:
+    if profile is None:
+        return _find_in_fleet(code, active)
     snapshot = profiles.find_profile(profile)
     if snapshot is None:
         raise FixRefused(f"No profile named {profile!r}. Nothing changed.")
@@ -106,15 +123,19 @@ def _find(code: str, profile: str, active: str) -> tuple[profiles.ProfileSnapsho
             return snapshot, finding
     for other in profiles.read_fleet():
         if other.name != profile and any(f.code == code for f in report.findings_for(other, active)):
+            command = report.hermes_command(active, f"tuneup fix {code}")
             raise FixRefused(
-                f"That code belongs to profile {other.name}: run `hermes tuneup fix {code} --profile {other.name}` "
-                "in a terminal. Nothing changed."
+                f"That code belongs to profile {other.name}: run `{command}` in a terminal. Nothing changed."
             )
     raise FixRefused(NO_SUCH_CODE)
 
 
-def prepare(code: str, profile: str, active: str) -> FixPlan:
-    """Locate the finding fresh and build the exact preview. Writes nothing to the profile."""
+def prepare(code: str, profile: str | None, active: str) -> FixPlan:
+    """Locate the finding fresh and build the exact preview. Writes nothing to the profile.
+
+    `profile` keeps the lookup to one profile (the slash command); None searches the fleet
+    (the terminal command, whose code alone names the profile).
+    """
     code = normalise_code(code)
     if adapter.is_managed():
         raise FixRefused("This Hermes config is managed by an administrator, so tuneup will not change it.")

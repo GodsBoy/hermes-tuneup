@@ -60,8 +60,14 @@ def test_fix_command_depends_on_whether_the_profile_is_active(make_profile):
     active_code = by_name["default"]["findings"][0]["code"]
     other_code = by_name["alpha"]["findings"][0]["code"]
     assert by_name["default"]["findings"][0]["fix_command"] == f"/tuneup fix {active_code}"
-    assert by_name["alpha"]["findings"][0]["fix_command"] == f"hermes tuneup fix {other_code} --profile alpha"
+    assert by_name["alpha"]["findings"][0]["fix_command"] == f"hermes -p default tuneup fix {other_code}"
     assert active_code != other_code
+
+
+def test_terminal_commands_name_the_profile_they_run_in(make_profile):
+    assert report.fix_command("ab12cd", "alpha", "beta") == "hermes -p beta tuneup fix ab12cd"
+    # Hermes calls a home outside its profiles folder "custom", which -p cannot name.
+    assert report.fix_command("ab12cd", "alpha", "custom") == "hermes tuneup fix ab12cd"
 
 
 def test_unresolved_profile_is_carried_with_its_reason(make_profile):

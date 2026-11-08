@@ -60,10 +60,21 @@ def finding_code(profile: str, check: str, key_path: list, observed: Any) -> str
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:6]
 
 
+def hermes_command(active: str, args: str) -> str:
+    """A terminal command line that runs in the active profile, where tuneup is enabled.
+
+    Hermes takes -p/--profile from anywhere on the line as its own profile switch, so the
+    profile goes before the subcommand. Hermes names a home outside its profiles folder
+    "custom", which -p cannot select, so that command relies on the shell's HERMES_HOME.
+    """
+    return f"hermes {args}" if active == "custom" else f"hermes -p {active} {args}"
+
+
 def fix_command(code: str, profile: str, active: str) -> str:
+    """The slash command on the active profile; elsewhere a terminal command, since the code names its profile."""
     if profile == active:
         return f"/tuneup fix {code}"
-    return f"hermes tuneup fix {code} --profile {profile}"
+    return hermes_command(active, f"tuneup fix {code}")
 
 
 def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: list[Check]) -> dict:

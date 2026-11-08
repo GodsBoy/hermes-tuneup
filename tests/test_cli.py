@@ -2,7 +2,11 @@
 
 import argparse
 import json
+import re
 
+import pytest
+
+from conftest import REPO_ROOT
 from fleetutil import CLEAN, busy_fleet
 from tuneup import cli
 
@@ -47,7 +51,58 @@ def test_check_json_matches_the_core_report(make_profile, capsys):
     assert codes(data) == codes(core) and codes(data)
 
 
-def test_check_named_profile(make_profile, capsys):
+def test_check_only_one_profile(make_profile, capsys):
     busy_fleet(make_profile, extra=1)
-    code, out = _run(["check", "--profile", "spare0", "--json"], capsys)
+    code, out = _run(["check", "--only", "spare0", "--json"], capsys)
     assert [p["name"] for p in json.loads(out)["profiles"]] == ["spare0"]
+
+
+def test_bare_tuneup_runs_check_on_every_profile(make_profile, capsys):
+    busy_fleet(make_profile, extra=1)
+    code, out = _run([], capsys)
+    assert code == 1
+    assert "tuneup: profile default" in out and "tuneup: profile spare0" in out
+
+
+def test_report_only_one_profile(make_profile, capsys):
+    busy_fleet(make_profile, extra=1)
+    code, out = _run(["report", "--only", "spare0", "--json"], capsys)
+    assert list(json.loads(out)) == ["spare0"]
+
+
+@pytest.mark.parametrize(
+    "argv",
+    [
+        ["check", "--profile", "spare0"],
+        ["check", "-p", "spare0"],
+        ["report", "--profile", "spare0"],
+        ["report", "-p", "spare0"],
+        ["fix", "abc123", "--profile", "spare0"],
+        ["fix", "abc123", "-p", "spare0"],
+        ["fix", "abc123", "--only", "spare0"],
+    ],
+)
+def test_no_option_uses_a_name_hermes_takes_for_itself(argv):
+    # Hermes strips -p/--profile from anywhere on the command line before tuneup sees it.
+    parser = argparse.ArgumentParser()
+    cli.setup(parser)
+    with pytest.raises(SystemExit):
+        parser.parse_args(argv)
+
+
+# A tuneup command line followed, anywhere later on that line, by Hermes' own profile switch.
+_PROFILE_AFTER_TUNEUP = re.compile(r"\btuneup (?:check|report|fix)\b[^\n`]*?[\s\[](?:--profile|-p)\b")
+
+
+def test_no_doc_or_message_puts_a_profile_switch_after_tuneup():
+    files = [
+        REPO_ROOT / name for name in ("README.md", "CONTRIBUTING.md", "plugin.yaml", "__init__.py", "demo/script.md")
+    ]
+    files += sorted((REPO_ROOT / "docs").glob("*.md")) + sorted((REPO_ROOT / "tuneup").rglob("*.py"))
+    files += [REPO_ROOT / "demo/seed_home.py", REPO_ROOT / "desktop/plugin.js", REPO_ROOT / "dashboard/plugin_api.py"]
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}: {match.group(0)}"
+        for path in files
+        for match in _PROFILE_AFTER_TUNEUP.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert offenders == []

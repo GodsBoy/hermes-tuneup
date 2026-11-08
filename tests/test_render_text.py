@@ -14,6 +14,7 @@ def test_layout_is_header_then_findings_high_to_low_then_fleet_line(make_profile
     assert tags == sorted(tags, key=lambda t: ["[HIGH]", "[MEDIUM]", "[LOW]"].index(t))
     assert any(line.strip().startswith("fix: /tuneup fix ") for line in lines)
     assert lines[-1].startswith("Fleet: 2 profiles")
+    assert lines[-1].endswith("Run hermes -p default tuneup check for details.")
 
 
 def test_messaging_cap_drops_whole_low_findings_and_keeps_the_high_one(make_profile):
@@ -24,7 +25,7 @@ def test_messaging_cap_drops_whole_low_findings_and_keeps_the_high_one(make_prof
     capped = render_text.render_active(rep, cap=len(full) - 10)
     assert len(capped) <= len(full) - 10
     assert high["fix_command"] in capped
-    assert "more, run hermes tuneup check" in capped
+    assert "more, run hermes -p default tuneup check" in capped
     kept = {line.strip().split()[-1] for line in capped.splitlines() if line.strip().startswith("fix: ")}
     dropped = {f["code"] for f in rep["profiles"][0]["findings"]} - kept
     assert dropped, "the cap should have dropped at least one finding"

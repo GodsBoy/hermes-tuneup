@@ -37,7 +37,8 @@ def _fix(code: str | None, ctx, platform: str, source) -> str:
         return str(exc)
     answer = ctx.ask_choice(confirm.question(plan), list(confirm.CHOICES)) if ctx is not None else None
     if answer != "Apply":
-        return confirm.NOTHING_CHANGED.format(code=fixes.normalise_code(code))
+        command = report.hermes_command(active, f"tuneup fix {fixes.normalise_code(code)}")
+        return confirm.NOTHING_CHANGED.format(command=command)
     try:
         return fixes.describe(fixes.apply(plan))
     except fixes.FixRefused as exc:
