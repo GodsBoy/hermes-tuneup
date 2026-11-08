@@ -97,6 +97,8 @@ hermes plugins validate . --install-deps
 
 Run pytest with the interpreter and dependencies your Hermes install uses, and with `TMPDIR` outside `~/.hermes`: Hermes treats any home under `~/.hermes` as a profile of the real install, and the suite refuses to run in that case.
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules every change follows.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE).
