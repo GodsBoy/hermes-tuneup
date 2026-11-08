@@ -155,4 +155,6 @@ def test_read_back_failure_after_the_write_still_reports_the_backup(make_profile
     result = fixes.apply(plan)
     assert result.read_back_ok is False
     assert result.backup.exists() and result.backup.parent == home / "backups" / "config"
-    assert "Backup:" in fixes.describe(result)
+    text = fixes.describe(result)
+    assert f"Backup: {result.backup}" in text
+    assert "Warning: reading the value back" in text
