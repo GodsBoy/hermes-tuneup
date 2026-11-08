@@ -134,6 +134,19 @@ def test_only_limits_report_to_the_named_profile(hermes):
     assert list(json.loads(result.stdout)) == ["default"]
 
 
+def test_help_says_a_bare_tuneup_runs_a_check(hermes):
+    result = hermes.run("hermes -p alpha tuneup --help")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "A bare hermes tuneup runs a check" in " ".join(result.stdout.split()), result.stdout
+
+
+def test_bare_tuneup_runs_a_check_with_terminal_fix_commands(hermes):
+    result = hermes.run("hermes -p alpha tuneup")
+    assert result.returncode in (0, 1), result.stdout + result.stderr
+    assert "tuneup: profile alpha" in result.stdout and "/tuneup fix" not in result.stdout
+    assert "fix: hermes -p alpha tuneup fix " in result.stdout
+
+
 def test_every_printed_terminal_command_reaches_tuneup(hermes):
     rep = _report(hermes)
     printed = sorted({f["fix_command"] for p in rep["profiles"] for f in p["findings"]})

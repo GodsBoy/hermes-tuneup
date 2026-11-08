@@ -70,14 +70,20 @@ def hermes_command(active: str, args: str) -> str:
     return f"hermes {args}" if active == "custom" else f"hermes -p {active} {args}"
 
 
-def fix_command(code: str, profile: str, active: str) -> str:
-    """The slash command on the active profile; elsewhere a terminal command, since the code names its profile."""
-    if profile == active:
+def fix_command(code: str, profile: str, active: str, terminal: bool = False) -> str:
+    """The slash command for the active profile in chat; otherwise a terminal command.
+
+    At a shell prompt (`terminal`) a slash command does nothing, so every finding gets the
+    terminal command. Another profile's finding gets it in chat too: the code names its profile.
+    """
+    if profile == active and not terminal:
         return f"/tuneup fix {code}"
     return hermes_command(active, f"tuneup fix {code}")
 
 
-def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: list[Check]) -> dict:
+def _profile_entry(
+    snapshot: profiles_mod.ProfileSnapshot, active: str, checks: list[Check], terminal: bool = False
+) -> dict:
     entry = {
         "name": clean(snapshot.name),
         "active": snapshot.name == active,
@@ -90,7 +96,7 @@ def _profile_entry(snapshot: profiles_mod.ProfileSnapshot, active: str, checks: 
         return entry
     route_list = build_routes(snapshot.config)
     entry["routes"] = [r.to_dict() for r in route_list]
-    entry["findings"] = [f.to_dict() for f in findings_for(snapshot, active, checks, route_list)]
+    entry["findings"] = [f.to_dict() for f in findings_for(snapshot, active, checks, route_list, terminal)]
     entry["receipts"] = receipts_summary(snapshot.path)
     return entry
 
@@ -100,6 +106,7 @@ def findings_for(
     active: str,
     checks: list[Check] | None = None,
     route_list: list[Route] | None = None,
+    terminal: bool = False,
 ) -> list[Finding]:
     """The profile's findings with codes and fix commands, raw values intact for the fix flow."""
     if snapshot.status != "ok" or snapshot.config is None:
@@ -114,7 +121,7 @@ def findings_for(
         f.profile = snapshot.name
         # The proposed value is part of the code, so two findings on one key (two dead rules) stay distinct.
         f.code = finding_code(snapshot.name, f.check, f.key_path, [f.current, f.proposed])
-        f.fix_command = fix_command(f.code, snapshot.name, active)
+        f.fix_command = fix_command(f.code, snapshot.name, active, terminal)
     return findings
 
 
@@ -124,8 +131,13 @@ def default_checks() -> list[Check]:
     return list(ALL_CHECKS)
 
 
-def build_report(active: str | None = None, checks: list[Check] | None = None, only: str | None = None) -> dict:
-    """The report for every profile, or for one profile when `only` names it."""
+def build_report(
+    active: str | None = None, checks: list[Check] | None = None, only: str | None = None, terminal: bool = False
+) -> dict:
+    """The report for every profile, or for one profile when `only` names it.
+
+    `terminal` is for the shell: every fix command is then one that runs there.
+    """
     active = active or profiles_mod.active_profile()
     checks = default_checks() if checks is None else checks
     if only is not None:
@@ -140,6 +152,6 @@ def build_report(active: str | None = None, checks: list[Check] | None = None, o
         "read_only": True,
         "cannot_apply": CANNOT_APPLY,
         "active_profile": clean(active),
-        "profiles": [_profile_entry(snapshot, active, checks) for snapshot in fleet],
+        "profiles": [_profile_entry(snapshot, active, checks, terminal) for snapshot in fleet],
         "notes": [],
     }

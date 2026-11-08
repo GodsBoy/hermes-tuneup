@@ -46,11 +46,11 @@ Then restart the gateway (`hermes gateway restart`) so running sessions load it.
 
 **In a terminal:**
 
-- `hermes tuneup check` reports every profile. `--only NAME` limits it to one, and `--json` prints the machine-readable report.
+- `hermes tuneup check` reports every profile; a bare `hermes tuneup` does the same. `--only NAME` limits it to one (an unknown name lists the profiles), and `--json` prints the machine-readable report.
 - `hermes tuneup report` shows the prediction receipts. It takes `--only NAME` and `--json` too.
 - `hermes tuneup fix <code>` applies one fix after you type `yes`. The code names its profile, so the same command fixes any profile.
 
-Run these in a profile where tuneup is enabled. To pick that profile, put Hermes' own `-p NAME` before `tuneup`, for example `hermes -p work tuneup check`. Hermes reads `-p` and `--profile` anywhere on the command line as its own switch, which is why tuneup's options use other names. The fix commands tuneup prints already include the right `-p`.
+Run these in a profile where tuneup is enabled. To pick that profile, put Hermes' own `-p NAME` before `tuneup`, for example `hermes -p work tuneup check`. Hermes reads `-p` and `--profile` anywhere on the command line as its own switch, which is why tuneup's options use other names. The fix commands tuneup prints in a terminal are terminal commands that already include the right `-p`, for example `hermes -p work tuneup fix 3e22cf`; in chat, this profile's findings show `/tuneup fix <code>`.
 
 `hermes tuneup check` exits 0 when everything is clean, 1 when there is a high-severity finding, and 2 when a profile or route could not be resolved, so it can run after `hermes update` or in CI.
 

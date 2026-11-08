@@ -64,6 +64,42 @@ def test_bare_tuneup_runs_check_on_every_profile(make_profile, capsys):
     assert "tuneup: profile default" in out and "tuneup: profile spare0" in out
 
 
+def test_check_prints_the_terminal_fix_command_for_every_profile(make_profile, capsys):
+    # A slash command does nothing at a shell prompt, so the terminal never prints /tuneup fix.
+    busy_fleet(make_profile, extra=1)
+    code, out = _run(["check"], capsys)
+    printed = re.findall(r"fix: (.+)", out)
+    assert len(printed) == len(re.findall(r"\[(?:HIGH|MEDIUM|LOW)\]", out)) > 0
+    assert all(re.fullmatch(r"hermes -p default tuneup fix [0-9a-f]{6}", command) for command in printed), printed
+    assert "/tuneup fix" not in out
+
+
+def test_check_json_carries_the_terminal_fix_command(make_profile, capsys):
+    busy_fleet(make_profile, extra=1)
+    code, out = _run(["check", "--json"], capsys)
+    printed = [f["fix_command"] for p in json.loads(out)["profiles"] for f in p["findings"]]
+    assert printed and all(command.startswith("hermes -p default tuneup fix ") for command in printed)
+
+
+def test_help_says_a_bare_tuneup_runs_a_check():
+    parser = argparse.ArgumentParser(prog="hermes tuneup")
+    cli.setup(parser)
+    assert "A bare hermes tuneup runs a check" in " ".join(parser.format_help().split())
+
+
+@pytest.mark.parametrize("sub", ["check", "report"])
+def test_unknown_only_name_lists_the_profiles(make_profile, capsys, sub):
+    busy_fleet(make_profile, extra=1)
+    code, out = _run([sub, "--only", "nope"], capsys)
+    assert code == 2
+    assert out.strip() == "tuneup: no profile named 'nope'. Profiles: default, spare0"
+
+
+def test_demo_close_line_installs_and_enables():
+    close = next(line for line in (REPO_ROOT / "demo/script.md").read_text(encoding="utf-8").splitlines() if "| Close |" in line)
+    assert "`hermes plugins install GodsBoy/hermes-tuneup --enable`" in close
+
+
 def test_report_only_one_profile(make_profile, capsys):
     busy_fleet(make_profile, extra=1)
     code, out = _run(["report", "--only", "spare0", "--json"], capsys)
