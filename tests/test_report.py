@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import sys
+
+import pytest
 
 from tuneup import report
 from tuneup.report import Finding
@@ -76,3 +79,12 @@ def test_profile_scope_limits_the_report(make_profile):
     make_profile("alpha", "model: {default: claude-opus-5-5, provider: anthropic}\n")
     rep = report.build_report(active="default", checks=[], only="alpha")
     assert [p["name"] for p in rep["profiles"]] == ["alpha"]
+
+
+def test_a_check_module_that_fails_to_import_raises_instead_of_reporting_no_findings(make_profile, monkeypatch):
+    make_profile("default", "model: {default: claude-opus-5-5, provider: anthropic}\n")
+    monkeypatch.setitem(sys.modules, "tuneup.checks", None)
+    with pytest.raises(ImportError):
+        report.default_checks()
+    with pytest.raises(ImportError):
+        report.build_report(active="default")

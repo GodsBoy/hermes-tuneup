@@ -150,11 +150,11 @@ def test_two_fixes_in_one_second_keep_two_backups(make_profile, monkeypatch):
 def test_dotted_and_colon_keys_survive_another_fix(make_profile):
     home = make_profile(
         "default",
-        f"""
-        model: {{default: gpt-6.1-sol, provider: openai-codex}}
+        """
+        model: {default: gpt-6.1-sol, provider: openai-codex}
         compression:
           proactive_prune_tokens: 48000
-          model_thresholds: {{"openai-codex:gpt-5.6": 0.85, "openai-codex:gpt-6": 0.85}}
+          model_thresholds: {"openai-codex:gpt-5.6": 0.85, "openai-codex:gpt-6": 0.85}
         """,
     )
     fixes.apply(fixes.prepare(_code(check="prune_cache"), profile="default", active="default"))
