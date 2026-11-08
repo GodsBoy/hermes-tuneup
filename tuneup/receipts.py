@@ -1,5 +1,11 @@
 """Opt-in prediction receipts: when compaction really fired, next to the trigger tuneup predicted.
 
+Hermes compacts on the size of the whole request: the provider's prompt count for the
+last request (system prompt, tool schemas and messages) plus what was added since. The
+compaction event's own token count is a rough count of the messages alone, so a receipt
+compares the trigger with the last request's prompt_tokens from post_api_request and
+shows the message-only count only as a labelled aside.
+
 Metadata only. Hooks read just the normalised usage counters and the
 compaction kwargs; message content, responses and URLs are never touched.
 Session ids are stored as short hashes. Everything is best effort: a hook
@@ -14,6 +20,7 @@ import sqlite3
 from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NamedTuple
 
 from . import hermes_adapter as adapter
 from .routes import build_routes, format_tokens
@@ -24,6 +31,10 @@ PLUGIN = "hermes-tuneup"
 STATE_KEY = "receipts"
 THRESHOLD_REASONS = {"pre_api", "post_tool", "between_turns", "gateway_hygiene"}
 SESSION_LIMIT = 1024
+# A last request between these shares of the predicted trigger reads as in line with it.
+# Below: Hermes also counts what was added after that request, often a large tool result.
+# Above: the rough count of those additions can undershoot a little before Hermes acts.
+IN_LINE_LOW, IN_LINE_HIGH = 0.8, 1.05
 
 TEXT_NO_DB = "receipts off or tuneup not enabled in this profile"
 TEXT_OFF = "Receipts are off. Turn on with /tuneup receipts on"
@@ -36,9 +47,17 @@ _SCHEMA = (
     " prompt_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, updated_at TEXT)",
     "CREATE TABLE IF NOT EXISTS compactions (id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, session TEXT,"
     " kind TEXT, reason TEXT, before_tokens INTEGER, after_tokens INTEGER, messages_removed INTEGER,"
-    " model TEXT, provider TEXT, predicted_trigger INTEGER)",
-    "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '1')",
+    " model TEXT, provider TEXT, predicted_trigger INTEGER, request_tokens INTEGER)",
+    "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '2')",
 )
+
+
+class _Seen(NamedTuple):
+    """What the last API request in a session told us: its route and its prompt size."""
+
+    model: str
+    provider: str
+    request_tokens: int | None
 
 
 def _now() -> str:
@@ -55,6 +74,10 @@ def _connect() -> sqlite3.Connection:
     conn = plugin_db(PLUGIN)
     for statement in _SCHEMA:
         conn.execute(statement)
+    if "request_tokens" not in {row[1] for row in conn.execute("PRAGMA table_info(compactions)")}:
+        # A database from before request sizes were kept: add the column, keep every row.
+        conn.execute("ALTER TABLE compactions ADD COLUMN request_tokens INTEGER")
+        conn.execute("UPDATE meta SET value = '2' WHERE key = 'schema_version'")
     return conn
 
 
@@ -70,7 +93,7 @@ class Recorder:
 
     def __init__(self, ctx):
         self.ctx = ctx
-        self.sessions: OrderedDict[str, tuple[str, str]] = OrderedDict()
+        self.sessions: OrderedDict[str, _Seen] = OrderedDict()
         self._warned = False
 
     def enabled(self) -> bool:
@@ -98,11 +121,12 @@ class Recorder:
             if not self.enabled() or not session_id:
                 return
             key = _hash(session_id)
-            self.sessions[key] = (str(model or ""), str(provider or ""))
+            usage = usage if isinstance(usage, dict) else {}
+            # The latest request only (None when the provider reported no usage), never a running total.
+            self.sessions[key] = _Seen(str(model or ""), str(provider or ""), _int(usage.get("prompt_tokens")) or None)
             self.sessions.move_to_end(key)
             while len(self.sessions) > SESSION_LIMIT:
                 self.sessions.popitem(last=False)
-            usage = usage if isinstance(usage, dict) else {}
             conn = _connect()
             try:
                 conn.execute(
@@ -139,24 +163,25 @@ class Recorder:
         try:
             if not self.enabled():
                 return
-            route = self.sessions.get(_hash(old_session_id)) if old_session_id else None
-            route = route or self.sessions.get(_hash(session_id))
+            seen = self.sessions.get(_hash(old_session_id)) if old_session_id else None
+            seen = seen or self.sessions.get(_hash(session_id))
             predicted = None
-            if route is not None:
+            if seen is not None:
                 try:
-                    predicted = self._predict(*route)
+                    predicted = self._predict(seen.model, seen.provider)
                 except Exception:
                     predicted = None
             conn = _connect()
             try:
                 conn.execute(
                     "INSERT INTO compactions (at, session, kind, reason, before_tokens, after_tokens, messages_removed,"
-                    " model, provider, predicted_trigger) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    " model, provider, predicted_trigger, request_tokens) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     (_now(), _hash(session_id), str(kind or ""), str(reason or ""),
                      before_tokens if isinstance(before_tokens, int) else None,
                      after_tokens if isinstance(after_tokens, int) else None,
                      messages_removed if isinstance(messages_removed, int) else None,
-                     route[0] if route else None, route[1] if route else None, predicted),
+                     seen.model if seen else None, seen.provider if seen else None, predicted,
+                     seen.request_tokens if seen else None),
                 )
                 conn.commit()
             finally:
@@ -165,13 +190,13 @@ class Recorder:
             self._warn_once(exc)
 
 
+def _threshold(row: dict) -> bool:
+    return row["kind"] == "summarize" and row["reason"] in THRESHOLD_REASONS
+
+
 def _compared(row: dict) -> bool:
-    return (
-        row["kind"] == "summarize"
-        and row["reason"] in THRESHOLD_REASONS
-        and row["before_tokens"] is not None
-        and row["predicted_trigger"] is not None
-    )
+    """Like with like only: the last request's full size against the predicted trigger."""
+    return _threshold(row) and row["predicted_trigger"] is not None and row.get("request_tokens") is not None
 
 
 def summary(profile_dir: Path, limit: int = 5) -> dict:
@@ -195,11 +220,9 @@ def summary(profile_dir: Path, limit: int = 5) -> dict:
     prompt, read, write = (totals["p"] or 0), (totals["r"] or 0), (totals["w"] or 0)
     ratio = round(read / prompt, 4) if prompt and (read or write) else None
     cache_note = "" if ratio is not None else (NOT_REPORTED if prompt else "")
-    compactions = [
-        {k: row[k] for k in ("at", "kind", "reason", "before_tokens", "after_tokens", "predicted_trigger")}
-        | {"compared": _compared(row)}
-        for row in rows
-    ]
+    fields = ("at", "kind", "reason", "before_tokens", "after_tokens", "predicted_trigger", "request_tokens")
+    # A database from before request sizes were kept has no request_tokens column: read it as unknown.
+    compactions = [{k: row.get(k) for k in fields} | {"compared": _compared(row)} for row in rows]
     if meta.get("enabled") != "1":
         state, text = "off", TEXT_OFF
     elif not compactions:
@@ -209,17 +232,48 @@ def summary(profile_dir: Path, limit: int = 5) -> dict:
     return {"state": state, "text": text, "compactions": compactions, "cache_read_ratio": ratio, "cache_note": cache_note}
 
 
+def _verdict(request: int, predicted: int) -> str:
+    if request > predicted * IN_LINE_HIGH:
+        return "above"
+    if request < predicted * IN_LINE_LOW:
+        return "below"
+    return "in line with"
+
+
+def _compared_text(c: dict) -> str:
+    request, predicted = c["request_tokens"], c["predicted_trigger"]
+    verdict = _verdict(request, predicted)
+    text = (
+        f"Last threshold compaction ({c['reason']}) fired after a request of {format_tokens(request)}, "
+        f"{verdict} the predicted {format_tokens(predicted)} trigger"
+    )
+    if verdict == "below":
+        text += " (Hermes also counts what was added after that request)"
+    text += ". Request size is the provider's count of the whole request (system prompt, tools and messages)"
+    if c["before_tokens"] is not None:
+        text += f"; Hermes' message-only estimate at compaction was {format_tokens(c['before_tokens'])}"
+    return text + "."
+
+
+def _uncompared_text(c: dict) -> str:
+    if _threshold(c) and c["predicted_trigger"] is not None:
+        text = (
+            f"Last threshold compaction ({c['reason']}): no request size was recorded, so it is not compared "
+            f"with the predicted {format_tokens(c['predicted_trigger'])} trigger."
+        )
+        if c["before_tokens"] is not None:
+            text += (
+                f" Hermes' message-only estimate was {format_tokens(c['before_tokens'])}, "
+                "which leaves out the system prompt and tools."
+            )
+        return text
+    detail = "route unknown" if c["predicted_trigger"] is None and c["reason"] in THRESHOLD_REASONS else c["reason"]
+    return f"Last compaction: {c['kind']} ({detail}), not compared with a prediction."
+
+
 def _describe(compactions: list[dict], ratio: float | None, cache_note: str) -> str:
     latest = next((c for c in compactions if c["compared"]), None)
-    if latest is not None:
-        text = (
-            f"Last threshold compaction fired at {format_tokens(latest['before_tokens'])} "
-            f"(Hermes' estimate) against a predicted {format_tokens(latest['predicted_trigger'])}."
-        )
-    else:
-        c = compactions[0]
-        detail = "route unknown" if c["predicted_trigger"] is None and c["reason"] in THRESHOLD_REASONS else c["reason"]
-        text = f"Last compaction: {c['kind']} ({detail}), not compared with a prediction."
+    text = _compared_text(latest) if latest is not None else _uncompared_text(compactions[0])
     if ratio is not None:
         text += f" Cache reads: {round(ratio * 100)}% of prompt tokens."
     elif cache_note:

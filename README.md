@@ -75,10 +75,13 @@ Reads never change a profile. Each read runs in a private temporary Hermes home 
 
 Receipts are off until you run `/tuneup receipts on`. When on, tuneup records, in its own `plugin-data/hermes-tuneup/` folder for that profile:
 
-- when each compaction fired, its kind and reason, and Hermes' estimate of the token count at that moment, next to the trigger tuneup predicted for that route;
+- when each compaction fired, its kind and reason, and the trigger tuneup predicted for that route;
+- the size of the last request before it, as the provider counted it, next to Hermes' own estimate at that moment;
 - per session, the totals of prompt tokens and cache reads, so it can show your cache-read share.
 
 It never reads or stores message content, responses or URLs, and stores session ids only as short hashes. Only threshold compactions are compared with the prediction; a manual `/compress` or an overflow recovery is listed but never counted as a miss.
+
+The comparison uses the request size because that is what Hermes compacts on: the provider's count of the whole request (system prompt, tool schemas and messages) plus what was added after it. Hermes' estimate in the compaction event counts the messages alone, so it reads well below the trigger; tuneup shows it, labelled as message-only, but never compares it. A compaction recorded without a request size (an older receipt, or a provider that reports no usage) is listed but not compared.
 
 ## Disclosure
 
