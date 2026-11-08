@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from .report import hermes_command
 from .severity import severity_counts, severity_rank
 
 
@@ -38,7 +39,7 @@ def fleet_line(rep: dict) -> str:
     return (
         f"Fleet: {plural(len(profiles), 'profile')}{extra}, {plural(len(findings), 'finding')} "
         f"({counts['high']} high, {counts['medium']} medium, {counts['low']} low). "
-        "Run hermes tuneup check for details."
+        f"Run {hermes_command(rep['active_profile'], 'tuneup check')} for details."
     )
 
 
@@ -56,7 +57,7 @@ def render_active(rep: dict, cap: int | None = None) -> str:
     def assemble(kept: list[str], dropped: int) -> str:
         parts = [head, *kept]
         if dropped:
-            parts.append(f"{dropped} more, run hermes tuneup check")
+            parts.append(f"{dropped} more, run {hermes_command(rep['active_profile'], 'tuneup check')}")
         parts.append(tail)
         return "\n".join(parts)
 

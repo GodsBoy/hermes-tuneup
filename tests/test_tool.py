@@ -32,7 +32,7 @@ def test_all_scope_on_ten_profiles_stays_small_and_flags_truncation(make_profile
     assert out["truncated"] is False
     assert all("routes" not in p for p in out["profiles"])
     others = [p for p in out["profiles"] if not p["active"]]
-    assert all(p["top_finding"]["fix_command"].startswith("hermes tuneup fix ") for p in others)
+    assert all(p["top_finding"]["fix_command"].startswith("hermes -p default tuneup fix ") for p in others)
     active = next(p for p in out["profiles"] if p["active"])
     assert active["top_finding"]["fix_command"].startswith("/tuneup fix ")
 

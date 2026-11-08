@@ -9,17 +9,21 @@ from . import confirm, fixes, profiles, render_text, report
 EXIT_CLEAN, EXIT_HIGH, EXIT_UNRESOLVED = 0, 1, 2
 
 
+USAGE = "Usage: hermes tuneup check|report [--only NAME] [--json] | hermes tuneup fix CODE"
+
+
 def setup(parser) -> None:
+    # Hermes takes -p/--profile from anywhere on the command line as its own profile switch
+    # before tuneup sees it, so no tuneup option may use either name.
     subs = parser.add_subparsers(dest="tuneup_command")
     check = subs.add_parser("check", help="Show when compaction fires on every profile and what to fix")
-    check.add_argument("--profile", help="Only this profile")
+    check.add_argument("--only", metavar="NAME", help="Only this profile")
     check.add_argument("--json", action="store_true", help="Machine-readable report")
     rep = subs.add_parser("report", help="Show prediction receipts: predicted against actual compaction")
-    rep.add_argument("--profile", help="Only this profile")
+    rep.add_argument("--only", metavar="NAME", help="Only this profile")
     rep.add_argument("--json", action="store_true", help="Machine-readable receipts")
     fix = subs.add_parser("fix", help="Apply one finding's fix after you confirm it at this terminal")
-    fix.add_argument("code", help="The six-character code shown with the finding")
-    fix.add_argument("--profile", help="The profile the finding belongs to (default: the active profile)")
+    fix.add_argument("code", help="The six-character code shown with the finding; it also names the profile")
     parser.set_defaults(func=handle)
 
 
@@ -42,11 +46,11 @@ def _unknown_profile(name: str | None) -> bool:
 
 
 def _check(args) -> int:
-    name = args.profile
+    name = getattr(args, "only", None)
     if _unknown_profile(name):
         return EXIT_UNRESOLVED
     rep = report.build_report(only=name)
-    print(json.dumps(rep, indent=2) if args.json else render_text.render_fleet(rep))
+    print(json.dumps(rep, indent=2) if getattr(args, "json", False) else render_text.render_fleet(rep))
     return exit_code(rep)
 
 
@@ -57,7 +61,7 @@ def _fix(args) -> int:
         return EXIT_UNRESOLVED
     active = profiles.active_profile()
     try:
-        plan = fixes.prepare(args.code, profile=getattr(args, "profile", None) or active, active=active)
+        plan = fixes.prepare(args.code, profile=None, active=active)
     except fixes.FixRefused as exc:
         print(exc)
         return EXIT_UNRESOLVED
@@ -75,7 +79,7 @@ def _fix(args) -> int:
 
 
 def _report(args) -> int:
-    name = args.profile
+    name = args.only
     if _unknown_profile(name):
         return EXIT_UNRESOLVED
     rep = report.build_report(only=name, checks=[])
@@ -94,5 +98,5 @@ def handle(args) -> int:
         return _report(args)
     if sub == "fix":
         return _fix(args)
-    print("Usage: hermes tuneup check|report [--profile NAME] [--json] | hermes tuneup fix CODE [--profile NAME]")
+    print(USAGE)
     return EXIT_UNRESOLVED

@@ -54,7 +54,7 @@ def main() -> int:
         print(f"Backed up the existing demo config to {backup}")
     config.write_text(SEED, encoding="utf-8")
     print(f"Seeded {config}")
-    print("Check it with: hermes -p tuneup-demo tuneup check --profile tuneup-demo")
+    print("Check it with: hermes -p tuneup-demo tuneup check --only tuneup-demo")
     return 0
 
 

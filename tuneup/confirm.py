@@ -13,7 +13,7 @@ MESSAGING_PLATFORMS = {
 CHOICES = ["Apply", "Cancel"]
 NOTHING_CHANGED = (
     "Nothing changed. If no confirmation appeared on this surface, run "
-    "`hermes tuneup fix {code}` in a terminal instead."
+    "`{command}` in a terminal instead."
 )
 UNATTENDED = "Fixes never run unattended (cron or a scheduled run). Nothing changed."
 

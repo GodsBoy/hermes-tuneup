@@ -75,7 +75,7 @@ def test_cancel_or_no_asker_changes_nothing(make_profile, answer):
     before = (home / "config.yaml").read_bytes()
     out = _slash(f"fix {_code()}", FakeCtx(answer))
     assert out.startswith("Nothing changed")
-    assert "hermes tuneup fix" in out
+    assert f"hermes -p default tuneup fix {_code()}" in out
     assert (home / "config.yaml").read_bytes() == before
     assert _backups(home) == []
 
@@ -193,8 +193,38 @@ def test_named_profile_fix_touches_only_that_profile(make_profile):
 def test_code_from_another_profile_is_redirected(make_profile):
     make_profile("default", "model: {default: claude-opus-5-5, provider: anthropic}\n")
     make_profile("alpha", PRUNE)
-    out = _slash(f"fix {_code(name='alpha')}", FakeCtx("Apply"))
-    assert "belongs to profile alpha" in out and "--profile alpha" in out
+    code = _code(name="alpha")
+    out = _slash(f"fix {code}", FakeCtx("Apply"))
+    assert "belongs to profile alpha" in out
+    assert f"`hermes -p default tuneup fix {code}`" in out and "--profile" not in out
+
+
+def test_cli_fix_finds_the_code_on_any_profile(make_profile, monkeypatch, capsys):
+    default = make_profile("default", PRUNE)
+    alpha = make_profile("alpha", PRUNE)
+    before = (default / "config.yaml").read_bytes()
+    monkeypatch.setattr(cli.confirm, "cli_refusal", lambda: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "yes")
+    parser = argparse.ArgumentParser()
+    cli.setup(parser)
+    assert cli.handle(parser.parse_args(["fix", _code(name="alpha")])) == 0
+    assert "Applied to profile alpha" in capsys.readouterr().out
+    assert _config(alpha)["compression"].get("proactive_prune_tokens", 0) == 0
+    assert (default / "config.yaml").read_bytes() == before
+
+
+def test_cli_fix_refuses_a_code_two_profiles_share(make_profile, monkeypatch, capsys):
+    homes = [make_profile("default", PRUNE), make_profile("alpha", PRUNE)]
+    before = [(h / "config.yaml").read_bytes() for h in homes]
+    monkeypatch.setattr(report, "finding_code", lambda *a: "abc123")
+    monkeypatch.setattr(cli.confirm, "cli_refusal", lambda: None)
+    monkeypatch.setattr("builtins.input", lambda prompt="": "yes")
+    parser = argparse.ArgumentParser()
+    cli.setup(parser)
+    assert cli.handle(parser.parse_args(["fix", "abc123"])) == cli.EXIT_UNRESOLVED
+    out = capsys.readouterr().out
+    assert "alpha" in out and "default" in out and "Nothing changed" in out
+    assert [(h / "config.yaml").read_bytes() for h in homes] == before
 
 
 def test_write_failure_leaves_the_original_intact(make_profile, monkeypatch):
