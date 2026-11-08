@@ -2,9 +2,11 @@
 
 import argparse
 import json
+import re
 
 import pytest
 
+from conftest import REPO_ROOT
 from fleetutil import CLEAN, busy_fleet
 from tuneup import cli
 
@@ -86,3 +88,21 @@ def test_no_option_uses_a_name_hermes_takes_for_itself(argv):
     cli.setup(parser)
     with pytest.raises(SystemExit):
         parser.parse_args(argv)
+
+
+# A tuneup command line followed, anywhere later on that line, by Hermes' own profile switch.
+_PROFILE_AFTER_TUNEUP = re.compile(r"\btuneup (?:check|report|fix)\b[^\n`]*?[\s\[](?:--profile|-p)\b")
+
+
+def test_no_doc_or_message_puts_a_profile_switch_after_tuneup():
+    files = [
+        REPO_ROOT / name for name in ("README.md", "CONTRIBUTING.md", "plugin.yaml", "__init__.py", "demo/script.md")
+    ]
+    files += sorted((REPO_ROOT / "docs").glob("*.md")) + sorted((REPO_ROOT / "tuneup").rglob("*.py"))
+    files += [REPO_ROOT / "demo/seed_home.py", REPO_ROOT / "desktop/plugin.js", REPO_ROOT / "dashboard/plugin_api.py"]
+    offenders = [
+        f"{path.relative_to(REPO_ROOT)}: {match.group(0)}"
+        for path in files
+        for match in _PROFILE_AFTER_TUNEUP.finditer(path.read_text(encoding="utf-8"))
+    ]
+    assert offenders == []
