@@ -9,14 +9,19 @@ from . import confirm, fixes, profiles, render_text, report
 EXIT_CLEAN, EXIT_HIGH, EXIT_UNRESOLVED = 0, 1, 2
 
 
-USAGE = "Usage: hermes tuneup check|report [--only NAME] [--json] | hermes tuneup fix CODE"
+USAGE = "Usage: hermes tuneup [check|report] [--only NAME] [--json] | hermes tuneup fix CODE"
+DESCRIPTION = (
+    "When compaction really fires on every profile, and what wastes quota.\n"
+    "A bare hermes tuneup runs a check, the same as hermes tuneup check."
+)
 
 
 def setup(parser) -> None:
     # Hermes takes -p/--profile from anywhere on the command line as its own profile switch
     # before tuneup sees it, so no tuneup option may use either name.
+    parser.description = DESCRIPTION
     subs = parser.add_subparsers(dest="tuneup_command")
-    check = subs.add_parser("check", help="Show when compaction fires on every profile and what to fix")
+    check = subs.add_parser("check", help="Show when compaction fires on every profile and what to fix (the default)")
     check.add_argument("--only", metavar="NAME", help="Only this profile")
     check.add_argument("--json", action="store_true", help="Machine-readable report")
     rep = subs.add_parser("report", help="Show prediction receipts: predicted against actual compaction")
@@ -39,8 +44,10 @@ def exit_code(rep: dict) -> int:
 
 
 def _unknown_profile(name: str | None) -> bool:
-    if name and name not in profiles.profile_names():
-        print(f"tuneup: no profile named {name!r}")
+    known = profiles.profile_names() if name else set()
+    if name and name not in known:
+        listed = ", ".join(sorted(known)) or "none found"
+        print(f"tuneup: no profile named {name!r}. Profiles: {listed}")
         return True
     return False
 
@@ -49,7 +56,7 @@ def _check(args) -> int:
     name = getattr(args, "only", None)
     if _unknown_profile(name):
         return EXIT_UNRESOLVED
-    rep = report.build_report(only=name)
+    rep = report.build_report(only=name, terminal=True)
     print(json.dumps(rep, indent=2) if getattr(args, "json", False) else render_text.render_fleet(rep))
     return exit_code(rep)
 

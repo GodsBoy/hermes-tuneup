@@ -70,6 +70,17 @@ def test_terminal_commands_name_the_profile_they_run_in(make_profile):
     assert report.fix_command("ab12cd", "alpha", "custom") == "hermes tuneup fix ab12cd"
 
 
+def test_terminal_report_prints_terminal_fix_commands_for_the_active_profile_too(make_profile):
+    make_profile("default", "model: {default: claude-opus-5-5, provider: anthropic}\n")
+    make_profile("alpha", "model: {default: claude-opus-5-5, provider: anthropic}\n")
+    assert report.fix_command("ab12cd", "alpha", "alpha", terminal=True) == "hermes -p alpha tuneup fix ab12cd"
+    assert report.fix_command("ab12cd", "alpha", "custom", terminal=True) == "hermes tuneup fix ab12cd"
+    rep = report.build_report(active="default", checks=[_dummy_check(48000)], terminal=True)
+    for entry in rep["profiles"]:
+        [finding] = entry["findings"]
+        assert finding["fix_command"] == f"hermes -p default tuneup fix {finding['code']}"
+
+
 def test_unresolved_profile_is_carried_with_its_reason(make_profile):
     make_profile("default", "model: {default: claude-opus-5-5, provider: anthropic}\n")
     make_profile("broken", "compression: [unclosed\n")

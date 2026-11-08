@@ -46,11 +46,11 @@ Then restart the gateway (`hermes gateway restart`) so running sessions load it.
 
 **In a terminal:**
 
-- `hermes tuneup check` reports every profile. `--only NAME` limits it to one, and `--json` prints the machine-readable report.
+- `hermes tuneup check` reports every profile; a bare `hermes tuneup` does the same. `--only NAME` limits it to one (an unknown name lists the profiles), and `--json` prints the machine-readable report.
 - `hermes tuneup report` shows the prediction receipts. It takes `--only NAME` and `--json` too.
 - `hermes tuneup fix <code>` applies one fix after you type `yes`. The code names its profile, so the same command fixes any profile.
 
-Run these in a profile where tuneup is enabled. To pick that profile, put Hermes' own `-p NAME` before `tuneup`, for example `hermes -p work tuneup check`. Hermes reads `-p` and `--profile` anywhere on the command line as its own switch, which is why tuneup's options use other names. The fix commands tuneup prints already include the right `-p`.
+Run these in a profile where tuneup is enabled. To pick that profile, put Hermes' own `-p NAME` before `tuneup`, for example `hermes -p work tuneup check`. Hermes reads `-p` and `--profile` anywhere on the command line as its own switch, which is why tuneup's options use other names. The fix commands tuneup prints in a terminal are terminal commands that already include the right `-p`, for example `hermes -p work tuneup fix 3e22cf`; in chat, this profile's findings show `/tuneup fix <code>`.
 
 `hermes tuneup check` exits 0 when everything is clean, 1 when there is a high-severity finding, and 2 when a profile or route could not be resolved, so it can run after `hermes update` or in CI.
 
@@ -75,10 +75,13 @@ Reads never change a profile. Each read runs in a private temporary Hermes home 
 
 Receipts are off until you run `/tuneup receipts on`. When on, tuneup records, in its own `plugin-data/hermes-tuneup/` folder for that profile:
 
-- when each compaction fired, its kind and reason, and Hermes' estimate of the token count at that moment, next to the trigger tuneup predicted for that route;
+- when each compaction fired, its kind and reason, and the trigger tuneup predicted for that route;
+- the size of the last request before it, as the provider counted it, next to Hermes' own estimate at that moment;
 - per session, the totals of prompt tokens and cache reads, so it can show your cache-read share.
 
 It never reads or stores message content, responses or URLs, and stores session ids only as short hashes. Only threshold compactions are compared with the prediction; a manual `/compress` or an overflow recovery is listed but never counted as a miss.
+
+The comparison uses the request size because that is what Hermes compacts on: the provider's count of the whole request (system prompt, tool schemas and messages) plus what was added after it. Hermes' estimate in the compaction event counts the messages alone, so it reads well below the trigger; tuneup shows it, labelled as message-only, but never compares it. A compaction recorded without a request size (an older receipt, or a provider that reports no usage) is listed but not compared.
 
 ## Disclosure
 
