@@ -1,4 +1,4 @@
-# Compound Engineering working files (plans, brainstorms, ideation, solutions, review notes)
+# Local working notes (plans, brainstorms, ideation, solutions, review notes)
 .context/
 docs/brainstorms/
 docs/plans/
@@ -7,7 +7,7 @@ docs/solutions/
 docs/residual-review-findings/
 todos/
 
-# Agent and editor state
+# Editor and tool state
 .claude/
 .codex/
 .cursor/
@@ -65,9 +65,10 @@ demo/out/
 tmp/
 scratch/
 
-# Local agent context and Compound Engineering artefacts (not for publication)
+# Local context (not for publication)
 .compound-engineering/
 tasks/
+CLAUDE.md
 PROGRESS.md
 TASK.md
 BRIEF.md
