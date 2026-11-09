@@ -84,12 +84,14 @@ def render_active(rep: dict, cap: int | None = None) -> str:
         return "\n".join(parts)
 
     lines = list(switched)
-    if cap is None or len(assemble(lines, blocks, 0)) <= cap:
-        return assemble(lines, blocks, 0)
-    while lines and len(assemble(lines, blocks, 0)) > cap:
+    text = assemble(lines, blocks, 0)
+    if cap is None or len(text) <= cap:
+        return text
+    while lines and len(text) > cap:
         lines.pop()
-    if len(assemble(lines, blocks, 0)) <= cap or not findings:
-        return assemble(lines, blocks, 0)
+        text = assemble(lines, blocks, 0)
+    if len(text) <= cap or not findings:
+        return text
     kept = list(blocks)
     while kept and len(assemble(lines, kept, len(blocks) - len(kept))) > cap:
         kept.pop()

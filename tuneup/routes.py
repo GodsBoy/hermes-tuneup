@@ -179,16 +179,6 @@ def identity(model: str, provider: str) -> tuple[str, str]:
         return model, (provider or "").strip().lower()
 
 
-def _already_routed(wanted: tuple[str, str], taken: list[tuple[str, str]]) -> bool:
-    """Whether a route already built runs this switched model, compared as Hermes runs both.
-
-    Only an exact match counts. A configured route with no provider (or "auto") is not the same
-    route as a model seen on a named provider: the seen route carries the provider Hermes really
-    used, which is what a provider-scoped model_thresholds rule is matched against.
-    """
-    return wanted in taken
-
-
 def build_routes(config: dict, switched=()) -> list[Route]:
     """Main, fallback and delegation routes, then the models the profile switches to, then the
     summariser when it is a separate model.
@@ -210,13 +200,17 @@ def build_routes(config: dict, switched=()) -> list[Route]:
     except adapter.Unresolved:
         child_cap = None
     found.append(_route("delegation", child_model, child_provider, config, ceiling=ceiling, extra_cap=child_cap))
-    # Checked against every route built so far, so a seen model already declared is added once.
+    # A switched model is skipped when a route built so far already runs it, compared as Hermes runs
+    # both, so a seen model already declared is added once. Only an exact match counts: a configured
+    # route with no provider (or "auto") is not the same route as a model seen on a named provider,
+    # because the seen route carries the provider Hermes really used, which is what a provider-scoped
+    # model_thresholds rule is matched against.
     taken = [identity(r.model, r.provider) for r in found] if switched else []
     for role, model, provider in switched:
         if not model:
             continue
         wanted = identity(model, provider)
-        if _already_routed(wanted, taken):
+        if wanted in taken:
             continue
         taken.append(wanted)
         found.append(_route(role, model, provider, config, ceiling=ceiling, extra_cap=None))

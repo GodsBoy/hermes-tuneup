@@ -89,13 +89,14 @@ def check(snapshot, routes) -> list[Finding]:
         proposed = {k: v for k, v in rules.items() if k != key}
         if target is not None:
             scope, _, substr = str(key).partition(":")
-            scope_id = scope.strip().lower()
+            scope = scope.strip()
+            scope_id = scope.lower()
             spec = f"{scope_id}:<model>" if _PROVIDER_ID.fullmatch(scope_id) else "<provider>:<model>"
             proposed[f"{target.provider}:{substr}"] = value
             reason = (
                 f"rule '{clean(key)}' never applies: no route runs on that provider. It matches "
                 f"{clean(target.model)}{switched_aside(target)} on {clean(target.provider)}, so rescope it to that "
-                f"provider. If you also switch to a model on {clean(scope.strip())}, declare it instead: "
+                f"provider. If you also switch to a model on {clean(scope)}, declare it instead: "
                 f"{_declare_hint(snapshot.name, spec)}."
             )
         else:
