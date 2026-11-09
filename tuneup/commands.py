@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from . import confirm, fixes, profiles, render_text, report
+from . import models as models_mod
 
 MESSAGING_CAP = 3500
 USAGE = (
     "Usage: /tuneup (report for this profile), /tuneup fix <code> (apply one fix after you confirm), "
-    "/tuneup receipts on|off (record compaction receipts)."
+    "/tuneup receipts on|off (record compaction receipts), "
+    "/tuneup models [add|remove <provider>:<model> | days <n>] (the models you switch to)."
 )
 
 
@@ -59,6 +63,13 @@ def _receipts(arg: str | None, recorder) -> str:
     return "Receipts are off for this profile. Existing records stay until you delete plugin-data/hermes-tuneup."
 
 
+def _models(args: list[str]) -> str:
+    from hermes_constants import get_hermes_home
+
+    profile = profiles.active_profile()
+    return models_mod.command(args, prefix="/tuneup", profile=profile, profile_dir=Path(get_hermes_home()))[1]
+
+
 def handle(
     raw_args: str = "", *, ctx=None, recorder=None, session_id: str = "", platform: str = "", source=None, **_kw
 ) -> str:
@@ -71,6 +82,8 @@ def handle(
         return _fix(parts[1] if len(parts) > 1 else None, ctx, platform, source)
     if sub == "receipts":
         return _receipts(parts[1].lower() if len(parts) > 1 else None, recorder)
+    if sub == "models":
+        return _models(parts[1:])
     return USAGE
 
 

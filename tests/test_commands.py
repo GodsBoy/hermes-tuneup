@@ -19,3 +19,49 @@ def test_report_is_capped_on_telegram(make_profile):
 def test_unknown_subcommand_shows_usage(make_profile):
     busy_fleet(make_profile, extra=0)
     assert "Usage" in commands.handle("frobnicate", platform="cli")
+
+
+CODEX = "model: {default: gpt-6.1-sol, provider: openai-codex}\n"
+
+
+def test_slash_models_declares_lists_and_forgets_without_touching_config(make_profile):
+    home = make_profile("default", CODEX)
+    before = (home / "config.yaml").read_bytes()
+    out = commands.handle("models add anthropic:claude-opus-5-5", platform="cli")
+    assert out.startswith("Declared anthropic:claude-opus-5-5 for profile default.")
+    listed = commands.handle("models", platform="cli")
+    assert "You switch to: anthropic:claude-opus-5-5" in listed
+    assert "/tuneup models add <provider>:<model>" in listed and "/tuneup models days <n>" in listed
+    assert "already declared" in commands.handle("models add anthropic:claude-opus-5-5", platform="cli")
+    assert commands.handle("models remove anthropic:claude-opus-5-5", platform="cli").startswith("Forgot")
+    assert "You switch to: none declared" in commands.handle("models list", platform="cli")
+    assert (home / "config.yaml").read_bytes() == before
+
+
+def test_slash_models_says_when_hermes_runs_a_model_under_another_name(make_profile):
+    make_profile("default", CODEX)
+    out = commands.handle("models add claude:claude-opus-4.5", platform="cli")
+    assert out.startswith("Declared anthropic:claude-opus-4-5 for profile default.")
+    assert "how Hermes runs claude:claude-opus-4.5" in out
+
+
+def test_slash_models_days_changes_the_seen_window(make_profile):
+    make_profile("default", CODEX)
+    assert "last 7 days" in commands.handle("models days 7", platform="cli")
+    assert "Seen in the last 7 days" in commands.handle("models", platform="cli")
+    assert "off" in commands.handle("models days 0", platform="cli")
+    assert "whole number from 0 to 365" in commands.handle("models days 400", platform="cli")
+
+
+def test_slash_models_rejects_a_bad_spec_or_action(make_profile):
+    make_profile("default", CODEX)
+    assert "<provider>:<model>" in commands.handle("models add claude-opus-5-5", platform="cli")
+    assert "Usage: /tuneup models" in commands.handle("models frobnicate", platform="cli")
+    assert "Usage: /tuneup models" in commands.handle("models add", platform="cli")
+
+
+def test_chat_report_shows_the_models_you_switch_to(make_profile):
+    make_profile("default", CODEX)
+    commands.handle("models add anthropic:claude-opus-5-5", platform="cli")
+    out = commands.handle("", platform="cli")
+    assert "\nyou switch to: claude-opus-5-5 on anthropic compacts at about" in out

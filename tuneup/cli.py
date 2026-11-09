@@ -1,15 +1,21 @@
-"""`hermes tuneup check|report|fix`: the fleet view, receipts and confirmed fixes for the terminal."""
+"""`hermes tuneup check|report|fix|models`: the fleet view, receipts, confirmed fixes and the models
+you switch to, for the terminal."""
 
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from . import confirm, fixes, profiles, render_text, report
+from . import models as models_mod
 
 EXIT_CLEAN, EXIT_HIGH, EXIT_UNRESOLVED = 0, 1, 2
 
 
-USAGE = "Usage: hermes tuneup [check|report] [--only NAME] [--json] | hermes tuneup fix CODE"
+USAGE = (
+    "Usage: hermes tuneup [check|report] [--only NAME] [--json] | hermes tuneup fix CODE"
+    " | hermes tuneup models [add|remove PROVIDER:MODEL | days N]"
+)
 DESCRIPTION = (
     "When compaction really fires on every profile, and what wastes quota.\n"
     "A bare hermes tuneup runs a check, the same as hermes tuneup check."
@@ -29,6 +35,12 @@ def setup(parser) -> None:
     rep.add_argument("--json", action="store_true", help="Machine-readable receipts")
     fix = subs.add_parser("fix", help="Apply one finding's fix after you confirm it at this terminal")
     fix.add_argument("code", help="The six-character code shown with the finding; it also names the profile")
+    models = subs.add_parser(
+        "models",
+        help="List, declare or forget the models this profile switches to, or set how many days a seen model counts",
+    )
+    models.add_argument("action", nargs="?", default="list", choices=("list", "add", "remove", "days"))
+    models.add_argument("value", nargs="?", metavar="PROVIDER:MODEL|DAYS")
     parser.set_defaults(func=handle)
 
 
@@ -97,6 +109,18 @@ def _report(args) -> int:
     return EXIT_CLEAN
 
 
+def _models(args) -> int:
+    from hermes_constants import get_hermes_home
+
+    active = profiles.active_profile()
+    words = [args.action] + ([args.value] if args.value is not None else [])
+    ok, text = models_mod.command(
+        words, prefix=report.hermes_command(active, "tuneup"), profile=active, profile_dir=Path(get_hermes_home())
+    )
+    print(text)
+    return EXIT_CLEAN if ok else EXIT_UNRESOLVED
+
+
 def handle(args) -> int:
     sub = getattr(args, "tuneup_command", None) or "check"
     if sub == "check":
@@ -105,5 +129,7 @@ def handle(args) -> int:
         return _report(args)
     if sub == "fix":
         return _fix(args)
+    if sub == "models":
+        return _models(args)
     print(USAGE)
     return EXIT_UNRESOLVED

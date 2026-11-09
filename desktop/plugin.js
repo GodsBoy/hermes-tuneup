@@ -73,13 +73,15 @@ function RouteRow({ route }) {
   const detail = route.status === 'unresolved' ? `unresolved: ${route.note}` : route.explain
   return jsx('div', {
     className: 'text-[0.7rem] text-(--ui-text-tertiary)',
-    children: `${route.role}: ${route.model} on ${route.provider}, ${detail}`
+    children: `${route.label || route.role}: ${route.model} on ${route.provider}, ${detail}`
   })
 }
 
 function ProfileCard({ profile }) {
   const main = (profile.routes || []).find(r => r.role === 'main')
   const others = (profile.routes || []).filter(r => r.role !== 'main')
+  // Models the profile switches to: shown on every card, so a clean card still says what it checked.
+  const switched = others.filter(r => r.role === 'declared' || r.role === 'seen')
   const findings = [...(profile.findings || [])].sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3))
   const header = jsxs('div', {
     className: 'flex items-center gap-2',
@@ -100,7 +102,8 @@ function ProfileCard({ profile }) {
       children: [
         header,
         jsx('div', { className: 'text-xs text-(--ui-text-secondary)', children: 'No findings' }),
-        main ? jsx(RouteRow, { route: main }) : null
+        main ? jsx(RouteRow, { route: main }) : null,
+        ...switched.map((r, i) => jsx(RouteRow, { route: r }, `${r.role}-${i}`))
       ]
     })
   }

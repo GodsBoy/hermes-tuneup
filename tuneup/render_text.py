@@ -23,6 +23,16 @@ def header(entry: dict) -> str:
     return f"tuneup: profile {entry['name']}, {main['model']} on {main['provider']} {main['explain']}"
 
 
+def route_line(route: dict) -> str:
+    """One route under its label ("you switch to" for a declared model), for chat and terminal."""
+    detail = route["explain"] or route["note"] or route["status"]
+    return f"{route.get('label') or route['role']}: {route['model']} on {route['provider']} {detail}"
+
+
+def _switched_lines(entry: dict) -> list[str]:
+    return [route_line(r) for r in entry.get("routes", []) if r["role"] in ("declared", "seen")]
+
+
 def finding_block(f: dict) -> str:
     return f"[{f['severity'].upper()}] {f['summary']}\n  fix: {f['fix_command']}"
 
@@ -50,6 +60,8 @@ def render_active(rep: dict, cap: int | None = None) -> str:
         return "tuneup: no Hermes profiles found."
     findings = sorted(entry.get("findings", []), key=lambda f: severity_rank(f["severity"]))
     head, tail = header(entry), fleet_line(rep)
+    for line in _switched_lines(entry):
+        head += f"\n{line}"
     if entry.get("receipts"):
         head += f"\nReceipts: {entry['receipts']['text']}"
     blocks = [finding_block(f) for f in findings] or ["No findings: this profile's compaction settings look right."]
@@ -78,8 +90,7 @@ def render_fleet(rep: dict) -> str:
         for route in entry.get("routes", []):
             if route["role"] == "main":
                 continue
-            detail = route["explain"] or route["note"] or route["status"]
-            out.append(f"  {route['role']}: {route['model']} on {route['provider']} {detail}")
+            out.append(f"  {route_line(route)}")
         for f in sorted(entry.get("findings", []), key=lambda f: severity_rank(f["severity"])):
             out.append("  " + finding_block(f).replace("\n", "\n  "))
         if entry["status"] == "ok" and not entry.get("findings"):

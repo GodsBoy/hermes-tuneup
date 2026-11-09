@@ -25,7 +25,7 @@ def register(ctx) -> None:
         "tuneup",
         handler=commands.make_handler(ctx, recorder),
         description="When compaction really fires, and what wastes quota",
-        args_hint="[fix <code> | receipts on|off]",
+        args_hint="[fix <code> | receipts on|off | models [add|remove <provider>:<model> | days <n>]]",
     )
     ctx.register_cli_command(
         name="tuneup",

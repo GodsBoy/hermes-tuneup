@@ -172,3 +172,68 @@ def switched_for(profile_dir: Path) -> list[tuple[str, str, str]]:
     switched = [("declared", model, provider) for provider, model in known.declared]
     switched += [("seen", model, provider) for provider, model in known.seen if (provider, model) not in known.declared]
     return switched
+
+
+def _spec(provider: str, model: str) -> str:
+    return f"{provider}:{model}"
+
+
+def _listing(known: Known, prefix: str, profile: str) -> str:
+    declared = ", ".join(_spec(p, m) for p, m in known.declared) or "none declared"
+    if known.days == 0:
+        seen = f"Seen models are off ({prefix} models days {DEFAULT_DAYS} turns them on)."
+    else:
+        listed = ", ".join(_spec(p, m) for p, m in known.seen) or "none (receipts record them: /tuneup receipts on)"
+        seen = f"Seen in the last {known.days} days: {listed}"
+    return "\n".join(
+        [
+            f"Models tuneup checks for profile {profile}, besides the ones in config.yaml:",
+            f"  You switch to: {declared}",
+            f"  {seen}",
+            f"Declare one with {prefix} models add <provider>:<model>, forget one with {prefix} models remove "
+            f"<provider>:<model>, or set how many days a seen model counts with {prefix} models days <n> (0 turns "
+            "them off).",
+        ]
+    )
+
+
+def _change(action: str, value: str, profile: str) -> tuple[bool, str]:
+    if action == "days":
+        try:
+            days = int(value)
+            set_seen_days(days)
+        except ValueError:
+            return False, f"Days must be a whole number from 0 to {MAX_DAYS}."
+        if days == 0:
+            return True, f"Seen models are off for profile {profile}; declared and configured models still count."
+        return True, f"Models seen in the last {days} days now count for profile {profile}."
+    try:
+        provider, model = parse_spec(value)
+    except SpecError as exc:
+        return False, str(exc)
+    spec = _spec(provider, model)
+    if action == "remove":
+        if forget(provider, model):
+            return True, f"Forgot {spec} for profile {profile}."
+        return False, f"{spec} is not declared for profile {profile}."
+    if not declare(provider, model):
+        return True, f"{spec} is already declared for profile {profile}."
+    text = f"Declared {spec} for profile {profile}. tuneup now checks it as a model you switch to."
+    if spec != value.strip():
+        text += f" That is how Hermes runs {value.strip()}."
+    return True, text
+
+
+def command(args: list[str], *, prefix: str, profile: str, profile_dir: Path) -> tuple[bool, str]:
+    """`models`, `models list`, `models add|remove <provider>:<model>` and `models days <n>` for the
+    current profile. `prefix` is how the surface spells tuneup ("/tuneup" in chat, the hermes
+    command in a terminal). Returns whether it succeeded and the text to show."""
+    action = args[0].lower() if args else "list"
+    if action == "list" and len(args) <= 1:
+        return True, _listing(read(profile_dir), prefix, profile)
+    if action not in ("add", "remove", "days") or len(args) != 2:
+        return False, f"Usage: {prefix} models [add <provider>:<model> | remove <provider>:<model> | days <n>]"
+    try:
+        return _change(action, args[1], profile)
+    except (sqlite3.Error, OSError) as exc:
+        return False, f"tuneup could not save that ({type(exc).__name__}). Nothing changed."

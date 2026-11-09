@@ -116,6 +116,8 @@ def test_report_only_one_profile(make_profile, capsys):
         ["fix", "abc123", "--profile", "spare0"],
         ["fix", "abc123", "-p", "spare0"],
         ["fix", "abc123", "--only", "spare0"],
+        ["models", "add", "anthropic:claude-opus-5-5", "-p", "spare0"],
+        ["models", "--profile", "spare0"],
     ],
 )
 def test_no_option_uses_a_name_hermes_takes_for_itself(argv):
@@ -127,7 +129,7 @@ def test_no_option_uses_a_name_hermes_takes_for_itself(argv):
 
 
 # A tuneup command line followed, anywhere later on that line, by Hermes' own profile switch.
-_PROFILE_AFTER_TUNEUP = re.compile(r"\btuneup (?:check|report|fix)\b[^\n`]*?[\s\[](?:--profile|-p)\b")
+_PROFILE_AFTER_TUNEUP = re.compile(r"\btuneup (?:check|report|fix|models)\b[^\n`]*?[\s\[](?:--profile|-p)\b")
 
 
 def test_no_doc_or_message_puts_a_profile_switch_after_tuneup():
@@ -142,3 +144,46 @@ def test_no_doc_or_message_puts_a_profile_switch_after_tuneup():
         for match in _PROFILE_AFTER_TUNEUP.finditer(path.read_text(encoding="utf-8"))
     ]
     assert offenders == []
+
+
+def test_cli_models_declares_lists_forgets_and_sets_days(make_profile, capsys):
+    make_profile("default", "model: {default: gpt-6.1-sol, provider: openai-codex}\n")
+    code, out = _run(["models", "add", "anthropic:claude-opus-5-5"], capsys)
+    assert code == 0 and out.startswith("Declared anthropic:claude-opus-5-5 for profile default.")
+    code, out = _run(["models"], capsys)
+    assert code == 0 and "You switch to: anthropic:claude-opus-5-5" in out
+    assert "hermes -p default tuneup models add <provider>:<model>" in out and "/tuneup models" not in out
+    code, out = _run(["models", "days", "14"], capsys)
+    assert code == 0 and "last 14 days" in out
+    code, out = _run(["models", "remove", "anthropic:claude-opus-5-5"], capsys)
+    assert code == 0 and out.startswith("Forgot")
+
+
+def test_cli_models_exits_two_on_a_bad_spec_or_unknown_model(make_profile, capsys):
+    make_profile("default", "model: {default: gpt-6.1-sol, provider: openai-codex}\n")
+    assert _run(["models", "add", "claude-opus-5-5"], capsys)[0] == 2
+    assert _run(["models", "remove", "anthropic:never-declared"], capsys)[0] == 2
+    assert _run(["models", "days", "-1"], capsys)[0] == 2
+
+
+def test_terminal_report_labels_switched_and_seen_routes(make_profile, capsys):
+    from tuneup import models, receipts
+
+    class _State(dict):
+        def set(self, key, value):
+            self[key] = value
+
+    class _Ctx:
+        state = _State()
+
+    make_profile("default", "model: {default: gpt-6.1-sol, provider: openai-codex}\n")
+    models.declare("anthropic", "claude-opus-5-5")
+    recorder = receipts.Recorder(_Ctx())
+    recorder.set_enabled(True)
+    recorder.on_api_request(session_id="s1", model="claude-haiku-4-5", provider="anthropic", usage={"prompt_tokens": 1})
+    code, out = _run(["check"], capsys)
+    assert "  you switch to: claude-opus-5-5 on anthropic compacts at about" in out
+    assert "  seen recently: claude-haiku-4-5 on anthropic compacts at about" in out
+    data = json.loads(_run(["check", "--json"], capsys)[1])
+    labels = [(r["role"], r["label"]) for r in data["profiles"][0]["routes"]]
+    assert ("declared", "you switch to") in labels and ("seen", "seen recently") in labels
