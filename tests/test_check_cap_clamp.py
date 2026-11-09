@@ -1,6 +1,7 @@
 """An explicit threshold_tokens that pulls the trigger below the ratio trigger."""
 
 from checkutil import run_check
+from tuneup import models
 from tuneup.checks.cap_clamp import check
 
 
@@ -39,3 +40,15 @@ def test_a_cap_above_the_ratio_trigger_is_not_reported(make_profile):
         "model: {default: claude-opus-5-5, provider: anthropic}\ncompression: {threshold: 0.5, threshold_tokens: 600000}\n",
     )
     assert found == []
+
+
+def test_a_cap_that_clamps_only_a_route_you_switch_to_is_one_finding(make_profile):
+    models.declare("anthropic", "claude-opus-5-5")
+    found = run_check(
+        check,
+        make_profile,
+        "model: {default: gpt-6.1-sol, provider: openai-codex}\ncompression: {threshold: 0.5, threshold_tokens: 400000}\n",
+    )
+    [f] = found
+    assert "caps compaction at 400K on claude-opus-5-5, a model you switch to, instead of about 500K" in f.summary
+    assert f.severity == "low"

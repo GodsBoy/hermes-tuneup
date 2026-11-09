@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..config_access import raw_section, section
 from ..redact import clean
 from ..report import Finding
+from ..routes import SWITCHED_ROLES, switched_aside
 from ..severity import effect_timing
 
 KEY = ["compression", "proactive_prune_tokens"]
@@ -28,7 +29,10 @@ def check(snapshot, routes) -> list[Finding]:
         return []
     if value <= 0:
         return []
-    cached = [r for r in routes if r.role in ("main", "fallback") and is_cached_subscription(r.provider)]
+    # One profile-wide setting: one finding, naming the first cached route and listing them all.
+    cached = [
+        r for r in routes if r.role in ("main", "fallback", *SWITCHED_ROLES) and is_cached_subscription(r.provider)
+    ]
     if not cached:
         return []
     route = cached[0]
@@ -37,7 +41,7 @@ def check(snapshot, routes) -> list[Finding]:
             check="prune_cache",
             severity="high",
             summary=(
-                f"proactive pruning is on ({value:,} tokens) while {clean(route.model)} runs on the cached "
+                f"proactive pruning is on ({value:,} tokens) while {clean(route.model)}{switched_aside(route)} runs on the cached "
                 f"subscription route {clean(route.provider)}. Every prune rewrites history and forces a full "
                 "prompt-cache miss, which burns quota. Turn pruning off."
             ),

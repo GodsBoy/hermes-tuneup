@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from . import hermes_adapter as adapter
+from . import models as models_mod
 from . import profiles as profiles_mod
 from .receipts import summary as receipts_summary
 from .redact import clean, scrub
@@ -81,6 +82,15 @@ def fix_command(code: str, profile: str, active: str, terminal: bool = False) ->
     return hermes_command(active, f"tuneup fix {code}")
 
 
+def routes_for(snapshot: profiles_mod.ProfileSnapshot) -> list[Route]:
+    """Every route the profile runs: config.yaml's, plus the models it declares or was seen using.
+
+    The report and the fix flow both build routes here, so a code a report shows is the code a
+    fix finds.
+    """
+    return build_routes(snapshot.config, models_mod.switched_for(snapshot.path))
+
+
 def _profile_entry(
     snapshot: profiles_mod.ProfileSnapshot, active: str, checks: list[Check], terminal: bool = False
 ) -> dict:
@@ -94,7 +104,7 @@ def _profile_entry(
     }
     if snapshot.status != "ok" or snapshot.config is None:
         return entry
-    route_list = build_routes(snapshot.config)
+    route_list = routes_for(snapshot)
     entry["routes"] = [r.to_dict() for r in route_list]
     entry["findings"] = [f.to_dict() for f in findings_for(snapshot, active, checks, route_list, terminal)]
     entry["receipts"] = receipts_summary(snapshot.path)
@@ -112,7 +122,7 @@ def findings_for(
     if snapshot.status != "ok" or snapshot.config is None:
         return []
     checks = default_checks() if checks is None else checks
-    route_list = build_routes(snapshot.config) if route_list is None else route_list
+    route_list = routes_for(snapshot) if route_list is None else route_list
     findings: list[Finding] = []
     for check in checks:
         findings.extend(check(snapshot, route_list))

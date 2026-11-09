@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding
-from ..routes import format_tokens
+from ..routes import SWITCHED_ROLES, format_tokens, switched_aside
 from ..severity import effect_timing
 
 KEY = ["compression", "threshold_tokens"]
@@ -15,7 +15,7 @@ def check(snapshot, routes) -> list[Finding]:
     clamped = [
         r
         for r in routes
-        if r.role in ("main", "fallback")
+        if r.role in ("main", "fallback", *SWITCHED_ROLES)
         and r.status == "resolved"
         and r.factors.get("cap")
         and r.factors.get("summariser_ceiling") is None
@@ -28,7 +28,7 @@ def check(snapshot, routes) -> list[Finding]:
     severity = "medium" if worst.trigger < worst.factors["ratio_trigger"] / 2 else "low"
     current = raw_section(snapshot, "compression").get("threshold_tokens", worst.factors["cap"])
     summary = (
-        f"threshold_tokens caps compaction at {format_tokens(worst.trigger)} on {clean(worst.model)}, "
+        f"threshold_tokens caps compaction at {format_tokens(worst.trigger)} on {clean(worst.model)}{switched_aside(worst) or ','} "
         f"instead of about {format_tokens(worst.factors['ratio_trigger'])} from the threshold ratio. "
         "Remove the cap to compact where the ratio says, or raise it if you set it on purpose."
     )

@@ -10,7 +10,7 @@ import pytest
 
 from conftest import REPO_ROOT
 from fleetutil import busy_fleet
-from tuneup import report
+from tuneup import models, report
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -76,3 +76,16 @@ def test_other_failures_keep_a_generic_message(tmp_path):
     out = _render(tmp_path, profile="work", error={"message": "socket hang up"})
     assert "could not load the report" in out["text"]
     assert "not enabled" not in out["text"]
+
+
+def test_pane_labels_the_models_you_switch_to(make_profile, tmp_path):
+    make_profile("default", "model: {default: gpt-6.1-sol, provider: openai-codex}\n")
+    models.declare("anthropic", "claude-opus-5-5")
+    data = report.build_report()
+    assert not data["profiles"][0]["findings"], "a clean card still lists the models you switch to"
+    out = _render(tmp_path, profile="default", data=data)["text"]
+    assert "you switch to: claude-opus-5-5 on anthropic, compacts at about" in out
+    busy_fleet(make_profile, extra=0)
+    models.declare("openai-codex", "gpt-6.1-sol")
+    busy = _render(tmp_path, profile="default", data=report.build_report())["text"]
+    assert "you switch to: gpt-6.1-sol on openai-codex, compacts at about" in busy

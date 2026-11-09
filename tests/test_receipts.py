@@ -196,6 +196,73 @@ def test_recording_upgrades_an_older_database_and_keeps_its_rows(make_profile):
     assert new["request_tokens"] == 147_912
     assert summary["compactions"][0]["compared"] is True and summary["compactions"][1]["compared"] is False
     assert "fired after a request of 148K" in summary["text"]
+    assert {(r["model"], r["provider"]) for r in _rows(home, "models_seen")} == {("claude-haiku-4-5", "anthropic")}
+    assert _meta(home)["schema_version"] == "3"
+
+
+def _meta(home):
+    return {r["key"]: r["value"] for r in _rows(home, "meta")}
+
+
+def _v2_database(home):
+    # A receipts database from before seen models were kept: request sizes, no models_seen table.
+    _v1_database(home)
+    with sqlite3.connect(_db(home)) as conn:
+        conn.execute("ALTER TABLE compactions ADD COLUMN request_tokens INTEGER")
+        conn.execute("UPDATE meta SET value = '2' WHERE key = 'schema_version'")
+        conn.execute(
+            "INSERT INTO sessions VALUES ('0c1d2e3f4a5b6c7d', 'claude-haiku-4-5', 'anthropic', 2, 20000, 0, 0,"
+            " '2026-11-09T08:00:00+00:00')"
+        )
+    return _db(home)
+
+
+def test_each_request_records_its_model_as_seen(make_profile, monkeypatch):
+    clock = iter(f"2026-11-09T10:00:{s:02d}+00:00" for s in range(60))
+    monkeypatch.setattr(receipts, "_now", lambda: next(clock))
+    home = make_profile("default", CFG)
+    rec = receipts.Recorder(Ctx())
+    rec.set_enabled(True)
+    rec.on_api_request(session_id="s1", model="claude-opus-5-5", provider="anthropic", usage=_usage())
+    [first] = _rows(home, "models_seen")
+    rec.on_api_request(session_id="s1", model="claude-opus-5-5", provider="anthropic", usage=_usage())
+    rec.on_api_request(session_id="s1", model="gpt-6.1-sol", provider="openai-codex", usage=_usage())
+    rows = {(r["model"], r["provider"]): r for r in _rows(home, "models_seen")}
+    assert set(rows) == {("claude-opus-5-5", "anthropic"), ("gpt-6.1-sol", "openai-codex")}
+    assert rows[("claude-opus-5-5", "anthropic")]["last_seen"] > first["last_seen"]
+    # The session row keeps only its latest model; the switch away from Claude is still known.
+    [session] = _rows(home, "sessions")
+    assert session["model"] == "gpt-6.1-sol"
+
+
+def test_a_request_without_a_model_records_no_seen_model(make_profile):
+    home = make_profile("default", CFG)
+    rec = receipts.Recorder(Ctx())
+    rec.set_enabled(True)
+    rec.on_api_request(session_id="s1", model="", provider="", usage=_usage())
+    assert _rows(home, "models_seen") == []
+
+
+def test_recording_adds_seen_models_to_a_v2_database_and_keeps_its_rows(make_profile):
+    home = make_profile("default", HAIKU)
+    _v2_database(home)
+    rec = receipts.Recorder(Ctx())
+    rec.set_enabled(True)
+    rec.on_api_request(session_id="s9", model="gpt-6.1-sol", provider="openai-codex", usage=_usage())
+    seen = {(r["model"], r["provider"]): r["last_seen"] for r in _rows(home, "models_seen")}
+    # Backfilled from the sessions it already had: the latest time each model was used.
+    assert seen[("claude-haiku-4-5", "anthropic")] == "2026-11-09T08:00:00+00:00"
+    assert ("gpt-6.1-sol", "openai-codex") in seen
+    assert len(_rows(home, "sessions")) == 3 and len(_rows(home, "compactions")) == 1
+    assert _meta(home)["schema_version"] == "3"
+
+
+def test_reading_receipts_never_adds_the_seen_models_table(make_profile):
+    home = make_profile("default", HAIKU)
+    db = _v2_database(home)
+    before = db.read_bytes()
+    receipts.summary(home)
+    assert db.read_bytes() == before
 
 
 def test_manual_overflow_and_prune_events_are_stored_but_not_compared(make_profile):

@@ -59,7 +59,7 @@ tuneup asks Hermes' own code for the real numbers, so what it reports is what He
 
 | Finding | What it means | Proposed fix |
 |---|---|---|
-| Rule never matches | A `model_thresholds` key applies to none of the profile's main, fallback or delegation routes, often because its provider scope names the wrong provider. A dotted model name stored as a nested mapping is ignored too. | Rescope the rule to the route it was meant for, flatten the nested key, or remove it |
+| Rule never matches | A `model_thresholds` key applies to none of the profile's routes (main, fallback, delegation, the models you declare and the models seen in recent sessions), often because its provider scope names the wrong provider. A dotted model name stored as a nested mapping is ignored too. | Rescope the rule to the route it was meant for, flatten the nested key, declare the model it is for, or remove it |
 | Summariser too small | The compression summariser's window is smaller than the trigger, so Hermes lowers the live trigger to it, or below Hermes' minimum it drops middle turns without a summary | Let the summariser follow the main model |
 | Pruning breaks the cache | `proactive_prune_tokens` is on while the profile runs on a prompt-cached subscription route (Claude subscription, Codex) | Turn pruning off |
 | Subagents on high effort | Every delegated subagent runs at high or extra-high reasoning effort, set directly or inherited from the parent | Set `delegation.reasoning_effort` to medium |
@@ -85,18 +85,60 @@ Restart the gateway after either command (`hermes gateway restart`) so running s
 - `/tuneup` shows this profile's routes, its findings with their fix commands, and a one-line summary of every profile.
 - `/tuneup fix <code>` previews the exact change and asks you to confirm it with Apply or Cancel.
 - `/tuneup receipts on` (or `off`) turns prediction receipts on for this profile.
+- `/tuneup models` lists the models tuneup checks besides `config.yaml`; `/tuneup models add <provider>:<model>` declares one you switch to, `remove` forgets it and `days <n>` sets how long a model seen in recent sessions counts. See [Switching between models](#switching-between-models).
 
 **In a terminal:**
 
 - `hermes tuneup check` reports every profile; a bare `hermes tuneup` does the same. `--only NAME` limits it to one (an unknown name lists the profiles), and `--json` prints the machine-readable report.
 - `hermes tuneup report` shows the prediction receipts. It takes `--only NAME` and `--json` too.
 - `hermes tuneup fix <code>` applies one fix after you type `yes`. The code names its profile, so the same command fixes any profile.
+- `hermes tuneup models` does what `/tuneup models` does, for the profile it runs in: `hermes tuneup models add <provider>:<model>`, `remove`, `days <n>`. It exits 2 on a spec or value it cannot use.
 
 Run these in a profile where tuneup is enabled. To pick that profile, put Hermes' own `-p NAME` before `tuneup`, for example `hermes -p work tuneup check`. Hermes reads `-p` and `--profile` anywhere on the command line as its own switch, which is why tuneup's options use other names. The fix commands tuneup prints in a terminal are terminal commands that already include the right `-p`, for example `hermes -p work tuneup fix 3e22cf`; in chat, this profile's findings show `/tuneup fix <code>`.
 
 `hermes tuneup check` exits 0 when everything is clean, 1 when there is a high-severity finding, and 2 when a profile or route could not be resolved, so it can run after `hermes update` or in CI.
 
 **In Hermes Desktop**, the tuneup pane shows a card per profile with its real triggers, findings and copyable fix commands. It is read-only.
+
+## Switching between models
+
+`config.yaml` names the model a profile starts with, but you can change model at any time with `/model`. Hermes re-reads its per-model settings on every switch: a `compression.model_thresholds` key is matched against the model you switch to (a substring of its name, longest match wins, optionally scoped as `<provider>:<substring>`), and `agent.reasoning_overrides` can give each model its own reasoning effort. So tuneup checks two more kinds of model besides the ones in `config.yaml`:
+
+- **Models you declare.** `/tuneup models add <provider>:<model>` (or `hermes tuneup models add` in a terminal) tells tuneup this profile switches to that model. It is kept in tuneup's own `plugin-data` folder for the profile, never in `config.yaml`, and in the form Hermes runs it: `claude:claude-opus-4.5` is kept as `anthropic:claude-opus-4-5`. `/tuneup models remove <provider>:<model>` forgets it.
+- **Models seen recently.** With receipts on, tuneup records the model and provider of every request, never their content. A model used in the last 30 days counts as seen; `/tuneup models days <n>` changes the window and `/tuneup models days 0` turns seen models off.
+
+Each one that `config.yaml` does not already route becomes a route of its own, labelled "you switch to" or "seen recently", with its real trigger from Hermes' own code, in chat, in the terminal, in the JSON report and in the Desktop pane. `/tuneup models` lists both kinds.
+
+For example, a profile that starts on Codex and switches to Claude for long reviews, with a threshold rule for the Claude sessions:
+
+```yaml
+model:
+  default: gpt-6.1-sol
+  provider: openai-codex
+compression:
+  threshold: 0.5
+  model_thresholds:
+    "anthropic:claude-opus": 0.8
+```
+
+From `config.yaml` alone, tuneup sees only Codex and reports the Claude rule as one that never applies. Declare the Claude model once:
+
+```bash
+hermes -p work tuneup models add anthropic:claude-opus-5-5
+```
+
+and `hermes -p work tuneup check` prices it as a route of its own, and the rule is no longer reported:
+
+```text
+tuneup: profile work, gpt-6.1-sol on openai-codex compacts at about 231K tokens (85% of a 272K window)
+  delegation: gpt-6.1-sol on openai-codex compacts at about 231K tokens (85% of a 272K window)
+  you switch to: claude-opus-5-5 on anthropic compacts at about 800K tokens (80% of a 1M window): rule 'anthropic:claude-opus' sets 80%
+  No findings.
+```
+
+**Profile-wide or per model.** `threshold`, `threshold_tokens`, `proactive_prune_tokens` and the summariser (`auxiliary.compression`) apply to every model the profile runs, so each gives at most one finding, however many routes it affects, and names the route it affects. `model_thresholds` and `agent.reasoning_overrides` choose a value per model, and each model brings its own context window, so the same settings can compact one model at 231K and another at 800K.
+
+**Fixes are judged against every model tuneup knows.** A finding and its fix are checked against the configured routes, the models you declared and the models seen in recent sessions, so a fix never tells you to remove a rule one of them needs. A model you switch to rarely, and have not declared, is the one gap: when a rule is reported as never applying, the finding tells you how to declare the model it is for.
 
 ## How the numbers are computed
 
@@ -120,6 +162,7 @@ Receipts are off until you run `/tuneup receipts on`. When on, tuneup records, i
 - when each compaction fired, its kind and reason, and the trigger tuneup predicted for that route;
 - the size of the last request before it, as the provider counted it, next to Hermes' own estimate at that moment;
 - per session, the totals of prompt tokens and cache reads, so it can show your cache-read share.
+- which model and provider each request used, and when each was last used, so it can check the models you switch to (see [Switching between models](#switching-between-models)).
 
 It never reads or stores message content, responses or URLs, and stores session ids only as short hashes. Only threshold compactions are compared with the prediction; a manual `/compress` or an overflow recovery is listed but never counted as a miss.
 
@@ -127,7 +170,7 @@ The comparison uses the request size because that is what Hermes compacts on: th
 
 ## Disclosure
 
-Reads every Hermes profile's `config.yaml`, read-only, through Hermes' own loader on a temporary copy. Writes a profile's `config.yaml` only when you confirm a fix, after saving a backup under that profile's `backups/config`. When you turn receipts on, records compaction and cache metadata (never message content) in its own `plugin-data` folder. Imports undocumented Hermes resolver modules from one adapter file, so `hermes plugins validate` shows catalogue rule 9 warnings. Makes no network calls, needs no credentials, and runs no shell commands or background processes.
+Reads every Hermes profile's `config.yaml`, read-only, through Hermes' own loader on a temporary copy. Writes a profile's `config.yaml` only when you confirm a fix, after saving a backup under that profile's `backups/config`. Keeps the models you declare, and, when you turn receipts on, compaction, cache and model-use metadata (never message content), in its own `plugin-data` folder. Imports undocumented Hermes resolver modules from one adapter file, so `hermes plugins validate` shows catalogue rule 9 warnings. Makes no network calls, needs no credentials, and runs no shell commands or background processes.
 
 ## Why `hermes plugins validate` warns
 

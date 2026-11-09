@@ -9,9 +9,17 @@ from .config_access import section as _section
 from .redact import clean
 
 
+# Routes a profile reaches by switching models rather than through config.yaml, with the label
+# every surface shows for them. Other roles are shown under their own name.
+ROLE_LABELS = {"declared": "you switch to", "seen": "seen recently"}
+SWITCHED_ROLES = tuple(ROLE_LABELS)
+# The words a finding uses, commas included, to say why a switched route counts.
+_ASIDES = {"declared": ", a model you switch to,", "seen": ", a model seen in recent sessions,"}
+
+
 @dataclass(frozen=True)
 class Route:
-    role: str  # "main", "fallback", "delegation" or "summariser"
+    role: str  # "main", "fallback", "delegation", "declared", "seen" or "summariser"
     model: str
     provider: str
     window: int | None = None
@@ -28,7 +36,13 @@ class Route:
         """Serialised for a report: every config-derived string passes through the redactor."""
         out = asdict(self)
         out["model"], out["provider"], out["note"] = clean(self.model), clean(self.provider), clean(self.note, 200)
+        out["label"] = ROLE_LABELS.get(self.role, self.role)
         return out
+
+
+def switched_aside(route: Route) -> str:
+    """Words, set off by commas, that tell a finding why a switched route counts; "" for any other route."""
+    return _ASIDES.get(route.role, "")
 
 
 def format_tokens(n: int) -> str:
@@ -157,8 +171,31 @@ def _route(role: str, model: str, provider: str, config: dict, *, ceiling: int |
     )
 
 
-def build_routes(config: dict) -> list[Route]:
-    """Main, fallback and delegation routes, then the summariser when it is a separate model."""
+def identity(model: str, provider: str) -> tuple[str, str]:
+    """(model, provider) as Hermes runs them, or as given (provider lower-cased) when Hermes cannot say."""
+    try:
+        return adapter.runtime_identity(model, provider)
+    except adapter.Unresolved:
+        return model, (provider or "").strip().lower()
+
+
+def _already_routed(wanted: tuple[str, str], taken: list[tuple[str, str]]) -> bool:
+    """Whether a route already built runs this switched model, compared as Hermes runs both.
+
+    Only an exact match counts. A configured route with no provider (or "auto") is not the same
+    route as a model seen on a named provider: the seen route carries the provider Hermes really
+    used, which is what a provider-scoped model_thresholds rule is matched against.
+    """
+    return wanted in taken
+
+
+def build_routes(config: dict, switched=()) -> list[Route]:
+    """Main, fallback and delegation routes, then the models the profile switches to, then the
+    summariser when it is a separate model.
+
+    `switched` holds (role, model, provider) for declared and recently seen models; each one that is
+    not already a configured route is priced by Hermes like a fallback, under the same summariser.
+    """
     summariser = _summariser_route(config)
     ceiling = summariser.window if summariser is not None and summariser.status == "resolved" else None
     main_model, main_provider = _main_identity(config)
@@ -173,6 +210,16 @@ def build_routes(config: dict) -> list[Route]:
     except adapter.Unresolved:
         child_cap = None
     found.append(_route("delegation", child_model, child_provider, config, ceiling=ceiling, extra_cap=child_cap))
+    # Checked against every route built so far, so a seen model already declared is added once.
+    taken = [identity(r.model, r.provider) for r in found] if switched else []
+    for role, model, provider in switched:
+        if not model:
+            continue
+        wanted = identity(model, provider)
+        if _already_routed(wanted, taken):
+            continue
+        taken.append(wanted)
+        found.append(_route(role, model, provider, config, ceiling=ceiling, extra_cap=None))
     if summariser is not None:
         found.append(summariser)
     return found

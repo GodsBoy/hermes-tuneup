@@ -14,6 +14,7 @@ route as unresolved instead of guessing a number.
 from __future__ import annotations
 
 import copy
+import functools
 import importlib
 import inspect
 import shutil
@@ -41,6 +42,8 @@ REQUIRED_ENTRY_POINTS: dict[str, tuple[str, ...]] = {
         "_longest_key_match",
     ),
     "hermes_cli.config_effective": ("load_user_config_effective",),
+    "hermes_cli.model_normalize": ("normalize_model_for_provider", "_AGGREGATOR_PROVIDERS"),
+    "hermes_cli.models": ("normalize_provider",),
     "hermes_cli.profiles": ("list_profile_names", "get_profile_dir", "get_active_profile_name"),
     "hermes_constants": ("parse_reasoning_effort",),
     "tools.delegate_tool": ("_child_compression_cap_tokens",),
@@ -226,6 +229,33 @@ def active_profile_name() -> str:
         return str(get_active_profile_name() or "default")
     except Exception:
         return "default"
+
+
+@functools.lru_cache(maxsize=256)
+def runtime_identity(model: str, provider: str) -> tuple[str, str]:
+    """The (model, provider) a running agent uses for a route, as Hermes normalises them at start-up.
+
+    Hermes canonicalises the provider (an alias such as "claude" becomes "anthropic") and, except on
+    an aggregator, rewrites the model id for it (Anthropic dots become hyphens). An empty or "auto"
+    provider is left alone: Hermes resolves those from credentials, never from the name.
+
+    Cached: the answer depends only on the two names (it is worked out in an empty home), and each
+    fresh home makes Hermes rebuild its provider registry, which a report polled every minute
+    would otherwise pay for every route.
+    """
+    _require()
+    from hermes_cli.model_normalize import _AGGREGATOR_PROVIDERS, normalize_model_for_provider
+    from hermes_cli.models import normalize_provider
+
+    model = (model or "").strip()
+    raw = (provider or "").strip().lower()
+    if raw in ("", "auto"):
+        return model, raw
+    with isolated_home():
+        canonical = normalize_provider(raw)
+        if not model or canonical in _AGGREGATOR_PROVIDERS:
+            return model, canonical
+        return normalize_model_for_provider(model, canonical), canonical
 
 
 def rule_rank(key: str, model: str, provider: str) -> tuple[int, int] | None:
