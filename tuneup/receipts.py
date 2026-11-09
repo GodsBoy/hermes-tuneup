@@ -50,6 +50,16 @@ _SCHEMA = (
     " model TEXT, provider TEXT, predicted_trigger INTEGER, request_tokens INTEGER)",
     "INSERT OR IGNORE INTO meta (key, value) VALUES ('schema_version', '2')",
 )
+# Every model and provider an API request used, with when it last ran. The sessions table keeps
+# only a session's latest model, so a /model switch inside one session would otherwise be lost.
+_SEEN_TABLE = (
+    "CREATE TABLE models_seen (model TEXT NOT NULL, provider TEXT NOT NULL, last_seen TEXT,"
+    " PRIMARY KEY (model, provider))"
+)
+_SEEN_BACKFILL = (
+    "INSERT INTO models_seen (model, provider, last_seen) SELECT model, COALESCE(provider, ''), MAX(updated_at)"
+    " FROM sessions WHERE model IS NOT NULL AND model != '' GROUP BY model, COALESCE(provider, '')"
+)
 
 
 class _Seen(NamedTuple):
@@ -78,6 +88,13 @@ def _connect() -> sqlite3.Connection:
         # A database from before request sizes were kept: add the column, keep every row.
         conn.execute("ALTER TABLE compactions ADD COLUMN request_tokens INTEGER")
         conn.execute("UPDATE meta SET value = '2' WHERE key = 'schema_version'")
+    if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'models_seen'").fetchone() is None:
+        # A database from before seen models were kept: add the table, fill it from the sessions it
+        # already holds, and keep every row.
+        conn.execute(_SEEN_TABLE)
+        conn.execute(_SEEN_BACKFILL)
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('schema_version', '3')")
+        conn.commit()
     return conn
 
 
@@ -140,6 +157,12 @@ class Recorder:
                     (key, str(model or ""), str(provider or ""), _int(usage.get("prompt_tokens")),
                      _int(usage.get("cache_read_tokens")), _int(usage.get("cache_write_tokens")), _now()),
                 )
+                if model:
+                    conn.execute(
+                        "INSERT INTO models_seen (model, provider, last_seen) VALUES (?, ?, ?)"
+                        " ON CONFLICT(model, provider) DO UPDATE SET last_seen = excluded.last_seen",
+                        (str(model), str(provider or ""), _now()),
+                    )
                 conn.commit()
             finally:
                 conn.close()
