@@ -1,12 +1,53 @@
-# hermes-tuneup
+<p align="center">
+  <img src="docs/banner.png" alt="hermes-tuneup: know when compaction really fires" width="100%">
+</p>
 
-![hermes-tuneup](docs/banner.png)
+<p align="center">
+  <b>Know when compaction really fires, and catch the settings that waste your quota.</b><br>
+  A plugin for <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> that checks every profile against the model routes it actually runs.
+</p>
 
-**Know when compaction really fires, and stop settings from quietly burning your quota.**
+<p align="center">
+  <a href="https://github.com/GodsBoy/hermes-tuneup/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/GodsBoy/hermes-tuneup/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0B0C0E" alt="CI"></a>
+  <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-plugin-FFDE1A?style=for-the-badge&labelColor=0B0C0E" alt="Hermes Agent plugin"></a>
+  <img src="https://img.shields.io/badge/version-0.1.0-E5DEC9?style=for-the-badge&labelColor=0B0C0E" alt="Version 0.1.0">
+  <img src="https://img.shields.io/badge/network_calls-none-1F3FD6?style=for-the-badge&labelColor=0B0C0E" alt="No network calls">
+  <img src="https://img.shields.io/badge/credentials-none_needed-1F3FD6?style=for-the-badge&labelColor=0B0C0E" alt="No credentials needed">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-E62B28?style=for-the-badge&labelColor=0B0C0E" alt="MIT licence"></a>
+</p>
 
-hermes-tuneup checks every [Hermes Agent](https://github.com/NousResearch/hermes-agent) profile against the model routes it actually runs. It tells you, in tokens, when each route will compact and why. It flags the settings that waste quota or break prompt caching, and fixes them only after you confirm, with a diff and a backup.
+<p align="center">
+  <a href="#quick-start"><b>Quick start</b></a> ·
+  <a href="#use-it"><b>Use it</b></a> ·
+  <a href="#what-it-checks"><b>What it checks</b></a> ·
+  <a href="#fixes-are-safe-by-design"><b>Safety</b></a> ·
+  <a href="#prediction-receipts"><b>Receipts</b></a> ·
+  <a href="CONTRIBUTING.md"><b>Contributing</b></a>
+</p>
 
-![hermes tuneup check on a demo profile](docs/screenshots/check.png)
+hermes-tuneup tells you, in tokens, when each route will compact and why. It flags the settings that waste quota or break prompt caching, and fixes them only after you confirm, with a diff and a backup. It works in chat, in the terminal and as a Hermes Desktop pane.
+
+<!-- DEMO VIDEO: add the demo video here once it is published. -->
+
+<p align="center">
+  <img src="docs/screenshots/check.png" alt="hermes tuneup check on a demo profile" width="90%">
+</p>
+
+## Quick start
+
+```bash
+hermes plugins install GodsBoy/hermes-tuneup --enable
+hermes gateway restart
+```
+
+Then type `/tuneup` in any chat, or ask Hermes "Why did my quota vanish?". tuneup needs no credentials, settings or network access.
+
+| Where | What you get |
+|---|---|
+| Chat (CLI, TUI, Desktop, messaging) | `/tuneup` report, `/tuneup fix <code>` with a preview and Apply or Cancel |
+| The agent itself | A read-only `tuneup_check` tool, so Hermes can explain its own triggers |
+| Terminal | `hermes tuneup check`, `report` and `fix`, with exit codes for CI |
+| Hermes Desktop | A read-only pane with a card per profile and copyable fix commands |
 
 ## Why
 
@@ -26,13 +67,14 @@ tuneup asks Hermes' own code for the real numbers, so what it reports is what He
 
 Every finding says when its fix takes effect: compression settings on the next message in gateway-backed sessions (messaging and Desktop) and in a new session in the classic CLI; summariser and delegation settings in a new session.
 
-## Install
+## Install and update
 
 ```bash
-hermes plugins install GodsBoy/hermes-tuneup --enable
+hermes plugins install GodsBoy/hermes-tuneup --enable   # install
+hermes plugins update hermes-tuneup                     # pick up fixes later
 ```
 
-Then restart the gateway (`hermes gateway restart`) so running sessions load it. tuneup needs no credentials, settings or network access.
+Restart the gateway after either command (`hermes gateway restart`) so running sessions load the new code. On Hermes Desktop with a remote backend, the pane half is copied to the Desktop machine when you use Install from Git in Desktop's Plugins page.
 
 ## Use it
 
