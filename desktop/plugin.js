@@ -1,8 +1,36 @@
 // hermes-tuneup Desktop pane: read-only. Shows when compaction really fires on
 // every profile and the fix command for each finding. There is no write path:
 // fixes are applied only when the user types the command.
-import { Badge, Button, CopyButton, EmptyState, ErrorState, ScrollArea, Skeleton, relativeTime, useQuery } from '@hermes/plugin-sdk'
+import { Badge, Button, CopyButton, EmptyState, ErrorState, ScrollArea, Skeleton, atom, host, relativeTime, useQuery, useValue } from '@hermes/plugin-sdk'
 import { jsx, jsxs } from 'react/jsx-runtime'
+
+// The profile Desktop is routed to. The report is fetched per profile, so a switch reloads it.
+const PROFILE = host?.state?.profile ?? atom(null)
+
+// The report's generated_at is an ISO string; the SDK's relativeTime takes milliseconds and
+// throws on anything that is not a finite number.
+function updatedLabel(generatedAt) {
+  const at = typeof generatedAt === 'number' ? generatedAt : Date.parse(generatedAt)
+  return Number.isFinite(at) ? `Updated ${relativeTime(at)}` : 'Updated'
+}
+
+// Desktop's REST bridge reports "<status>: <body>" in the message; statusCode may not survive.
+function httpStatus(error) {
+  const code = Number(error?.statusCode ?? error?.status)
+  if (Number.isInteger(code) && code > 0) return code
+  const match = /^(\d{3}):/.exec(String(error?.message ?? ''))
+  return match ? Number(match[1]) : null
+}
+
+function loadFailure(error, profile) {
+  const name = profile || 'default'
+  const status = httpStatus(error)
+  if (status === 404) {
+    const enable = name === 'default' ? 'hermes plugins enable hermes-tuneup' : `hermes -p ${name} plugins enable hermes-tuneup`
+    return `The hermes-tuneup plugin is not enabled for the "${name}" profile. Switch Desktop to a profile that has it, or enable it with: ${enable}`
+  }
+  return `The gateway did not return the report${status ? ` (HTTP ${status})` : ''}. Check that the hermes-tuneup plugin is enabled for the "${name}" profile.`
+}
 
 const SEVERITY_ORDER = { high: 0, medium: 1, low: 2 }
 const SEVERITY_VARIANT = { high: 'destructive', medium: 'warn', low: 'muted' }
@@ -89,8 +117,9 @@ function ProfileCard({ profile }) {
 }
 
 function TuneupPane({ ctx }) {
+  const profile = useValue(PROFILE)
   const query = useQuery({
-    queryKey: [ctx.source, 'report'],
+    queryKey: [ctx.source, 'report', profile],
     queryFn: () => ctx.rest('/report'),
     refetchInterval: 60000
   })
@@ -103,7 +132,7 @@ function TuneupPane({ ctx }) {
       className: 'p-3',
       children: jsx(ErrorState, {
         title: 'tuneup could not load the report',
-        description: 'The gateway did not answer. Check that the hermes-tuneup plugin is enabled for this profile.',
+        description: loadFailure(query.error, profile),
         children: jsx(Button, { size: 'sm', onClick: () => query.refetch(), children: 'Retry' })
       })
     })
@@ -119,7 +148,7 @@ function TuneupPane({ ctx }) {
         jsxs('div', {
           className: 'flex items-center justify-between gap-2',
           children: [
-            jsx('span', { className: 'text-xs text-(--ui-text-tertiary)', children: `Updated ${relativeTime(data.generated_at)}${stale}` }),
+            jsx('span', { className: 'text-xs text-(--ui-text-tertiary)', children: `${updatedLabel(data.generated_at)}${stale}` }),
             refresh
           ]
         }),
