@@ -2,8 +2,8 @@
 
 import pytest
 
-from checkutil import run_check
-from tuneup import models, receipts
+from checkutil import record_seen, run_check
+from tuneup import models
 from tuneup.checks.dead_rules import check
 
 SUBSCRIPTION = "claude-subscription-directsdk-experimental"
@@ -120,26 +120,9 @@ def test_covers_ae1_ae2_a_rule_for_a_declared_model_is_not_flagged(make_profile,
     assert run_check(check, make_profile, CODEX_WITH_CLAUDE_RULE.format(rule=rule)) == []
 
 
-class _State:
-    def __init__(self):
-        self.data = {}
-
-    def get(self, key, default=None):
-        return self.data.get(key, default)
-
-    def set(self, key, value):
-        self.data[key] = value
-
-
-class _Ctx:
-    state = _State()
-
-
 def test_a_rule_for_a_model_seen_in_recent_sessions_is_not_flagged(make_profile):
     make_profile("default", CODEX_WITH_CLAUDE_RULE.format(rule="anthropic:claude-opus"))
-    recorder = receipts.Recorder(_Ctx())
-    recorder.set_enabled(True)
-    recorder.on_api_request(session_id="s1", model="claude-opus-5-5", provider="anthropic", usage={"prompt_tokens": 1})
+    record_seen("claude-opus-5-5", "anthropic")
     assert run_check(check, make_profile, CODEX_WITH_CLAUDE_RULE.format(rule="anthropic:claude-opus")) == []
 
 

@@ -1,6 +1,7 @@
 """A summariser too small for the trigger it must summarise."""
 
 from checkutil import run_check
+from tuneup import models
 from tuneup.checks.summariser import check
 
 
@@ -59,8 +60,6 @@ def test_a_large_summariser_has_no_finding(make_profile):
 
 
 def test_a_summariser_that_lowers_only_a_route_you_switch_to_is_reported(make_profile):
-    from tuneup import models
-
     models.declare("anthropic", "claude-opus-5-5")
     found = run_check(
         check,

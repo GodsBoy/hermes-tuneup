@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .report import hermes_command
+from .routes import SWITCHED_ROLES
 from .severity import severity_counts, severity_rank
 
 
@@ -26,11 +27,11 @@ def header(entry: dict) -> str:
 def route_line(route: dict) -> str:
     """One route under its label ("you switch to" for a declared model), for chat and terminal."""
     detail = route["explain"] or route["note"] or route["status"]
-    return f"{route.get('label') or route['role']}: {route['model']} on {route['provider']} {detail}"
+    return f"{route['label']}: {route['model']} on {route['provider']} {detail}"
 
 
 def _switched_lines(entry: dict) -> list[str]:
-    return [route_line(r) for r in entry.get("routes", []) if r["role"] in ("declared", "seen")]
+    return [route_line(r) for r in entry.get("routes", []) if r["role"] in SWITCHED_ROLES]
 
 
 def finding_block(f: dict) -> str:

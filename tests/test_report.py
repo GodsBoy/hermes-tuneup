@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from tuneup import report
+from tuneup import models, profiles, report
 from tuneup.report import Finding
 
 
@@ -115,8 +115,6 @@ compression:
 
 
 def test_declared_models_are_routes_in_the_report_and_in_the_fix_lookup(make_profile):
-    from tuneup import models, profiles
-
     make_profile("default", SWITCHER)
     models.declare("anthropic", "claude-opus-5-5")
     entry = report.build_report(active="default")["profiles"][0]

@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from . import hermes_adapter as adapter
-from .receipts import PLUGIN
+from .receipts import PLUGIN, db_path, has_table
+from .routes import SWITCHED_ROLES, identity
 
 DEFAULT_DAYS = 30
 MAX_DAYS = 365
@@ -40,12 +40,9 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _identity(model: str, provider: str) -> tuple[str, str]:
-    """(provider, model) in the form Hermes runs, or as given when Hermes cannot say."""
-    try:
-        model, provider = adapter.runtime_identity(model, provider)
-    except adapter.Unresolved:
-        provider = (provider or "").strip().lower()
+def _spec_identity(model: str, provider: str) -> tuple[str, str]:
+    """(provider, model), the spec order this module keeps, in the form Hermes runs them."""
+    model, provider = identity(model, provider)
     return provider, model
 
 
@@ -56,7 +53,7 @@ def parse_spec(text: str) -> tuple[str, str]:
     provider, sep, model = raw.partition(":")
     if not (sep and provider and model) or len(raw) > MAX_SPEC or any(c.isspace() for c in raw):
         raise SpecError(f"Expected {SPEC_FORM}.")
-    return _identity(model, provider)
+    return _spec_identity(model, provider)
 
 
 def _connect() -> sqlite3.Connection:
@@ -101,12 +98,8 @@ def set_seen_days(days: int) -> None:
     _write("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (DAYS_KEY, str(days)))
 
 
-def _has_table(conn: sqlite3.Connection, name: str) -> bool:
-    return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
-
-
 def _days(conn: sqlite3.Connection) -> int:
-    if not _has_table(conn, "meta"):
+    if not has_table(conn, "meta"):
         return DEFAULT_DAYS
     row = conn.execute("SELECT value FROM meta WHERE key = ?", (DAYS_KEY,)).fetchone()
     try:
@@ -117,7 +110,7 @@ def _days(conn: sqlite3.Connection) -> int:
 
 
 def _declared(conn: sqlite3.Connection) -> list[tuple[str, str]]:
-    if not _has_table(conn, "declared_models"):
+    if not has_table(conn, "declared_models"):
         return []
     return [(str(p), str(m)) for p, m in conn.execute("SELECT provider, model FROM declared_models ORDER BY rowid")]
 
@@ -126,13 +119,13 @@ def _seen(conn: sqlite3.Connection, days: int) -> list[tuple[str, str]]:
     if days == 0:
         return []
     cutoff = (_now() - timedelta(days=days)).isoformat(timespec="seconds")
-    if _has_table(conn, "models_seen"):
+    if has_table(conn, "models_seen"):
         rows = conn.execute(
             "SELECT model, provider FROM models_seen WHERE model != '' AND last_seen >= ?"
             " ORDER BY last_seen DESC, model",
             (cutoff,),
         ).fetchall()
-    elif _has_table(conn, "sessions"):
+    elif has_table(conn, "sessions"):
         # A receipts database not yet migrated: each session's latest model is all it has.
         rows = conn.execute(
             "SELECT model, COALESCE(provider, '') AS provider, MAX(updated_at) AS last FROM sessions"
@@ -142,17 +135,13 @@ def _seen(conn: sqlite3.Connection, days: int) -> list[tuple[str, str]]:
         ).fetchall()
     else:
         return []
-    found: list[tuple[str, str]] = []
-    for row in rows:
-        identity = _identity(str(row[0]), str(row[1] or ""))
-        if identity not in found:
-            found.append(identity)
-    return found
+    # Two recorded spellings of one model collapse into one, keeping the most recent first.
+    return list(dict.fromkeys(_spec_identity(str(row[0]), str(row[1] or "")) for row in rows))
 
 
 def read(profile_dir: Path) -> Known:
     """A profile's declared and seen models, read without writing (read-only SQLite URI)."""
-    db = Path(profile_dir) / "plugin-data" / PLUGIN / "data.db"
+    db = db_path(profile_dir)
     if not db.is_file():
         return Known()
     try:
@@ -168,9 +157,10 @@ def read(profile_dir: Path) -> Known:
 
 def switched_for(profile_dir: Path) -> list[tuple[str, str, str]]:
     """(role, model, provider) for every declared model, then every seen model not also declared."""
+    declared_role, seen_role = SWITCHED_ROLES
     known = read(profile_dir)
-    switched = [("declared", model, provider) for provider, model in known.declared]
-    switched += [("seen", model, provider) for provider, model in known.seen if (provider, model) not in known.declared]
+    switched = [(declared_role, model, provider) for provider, model in known.declared]
+    switched += [(seen_role, model, provider) for provider, model in known.seen if (provider, model) not in known.declared]
     return switched
 
 

@@ -6,7 +6,7 @@ from .. import hermes_adapter as adapter
 from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding
-from ..routes import format_tokens, switched_aside
+from ..routes import SWITCHED_ROLES, format_tokens, switched_aside
 from ..severity import effect_timing
 
 KEY = ["auxiliary", "compression"]
@@ -23,7 +23,7 @@ def check(snapshot, routes) -> list[Finding]:
         (
             r
             for r in routes
-            if r.role in ("main", "declared", "seen") and r.status == "resolved" and r.factors.get("summariser_ceiling")
+            if r.role in ("main", *SWITCHED_ROLES) and r.status == "resolved" and r.factors.get("summariser_ceiling")
         ),
         None,
     )

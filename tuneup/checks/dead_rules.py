@@ -6,13 +6,13 @@ from .. import hermes_adapter as adapter
 from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding, hermes_command
-from ..routes import format_tokens, switched_aside
+from ..routes import SWITCHED_ROLES, format_tokens, switched_aside
 from ..severity import effect_timing
 
 KEY = ["compression", "model_thresholds"]
 CAVEAT = "cron jobs are not checked"
 # Configured routes plus the models the profile switches to: a rule matching any of them is used.
-CANDIDATE_ROLES = ("main", "fallback", "delegation", "declared", "seen")
+CANDIDATE_ROLES = ("main", "fallback", "delegation", *SWITCHED_ROLES)
 
 
 def _flatten(rules: dict) -> dict:

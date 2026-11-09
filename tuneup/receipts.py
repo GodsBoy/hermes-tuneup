@@ -78,6 +78,15 @@ def _hash(session_id: str) -> str:
     return hashlib.sha256(str(session_id or "").encode("utf-8")).hexdigest()[:16]
 
 
+def db_path(profile_dir: Path) -> Path:
+    """A profile's tuneup database, which receipts and the models a profile switches to share."""
+    return Path(profile_dir) / "plugin-data" / PLUGIN / "data.db"
+
+
+def has_table(conn: sqlite3.Connection, name: str) -> bool:
+    return conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)).fetchone() is not None
+
+
 def _connect() -> sqlite3.Connection:
     from plugins.plugin_storage import plugin_db
 
@@ -88,7 +97,7 @@ def _connect() -> sqlite3.Connection:
         # A database from before request sizes were kept: add the column, keep every row.
         conn.execute("ALTER TABLE compactions ADD COLUMN request_tokens INTEGER")
         conn.execute("UPDATE meta SET value = '2' WHERE key = 'schema_version'")
-    if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'models_seen'").fetchone() is None:
+    if not has_table(conn, "models_seen"):
         # A database from before seen models were kept: add the table, fill it from the sessions it
         # already holds, and keep every row.
         conn.execute(_SEEN_TABLE)
@@ -224,7 +233,7 @@ def _compared(row: dict) -> bool:
 
 def summary(profile_dir: Path, limit: int = 5) -> dict:
     """The receipts for one profile, read without writing (read-only SQLite URI)."""
-    db = Path(profile_dir) / "plugin-data" / PLUGIN / "data.db"
+    db = db_path(profile_dir)
     if not db.is_file():
         return {"state": "none", "text": TEXT_NO_DB, "compactions": [], "cache_read_ratio": None, "cache_note": ""}
     try:

@@ -1,6 +1,7 @@
 """An explicit threshold_tokens that pulls the trigger below the ratio trigger."""
 
 from checkutil import run_check
+from tuneup import models
 from tuneup.checks.cap_clamp import check
 
 
@@ -42,8 +43,6 @@ def test_a_cap_above_the_ratio_trigger_is_not_reported(make_profile):
 
 
 def test_a_cap_that_clamps_only_a_route_you_switch_to_is_one_finding(make_profile):
-    from tuneup import models
-
     models.declare("anthropic", "claude-opus-5-5")
     found = run_check(
         check,

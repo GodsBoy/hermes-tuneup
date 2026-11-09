@@ -13,6 +13,8 @@ from .redact import clean
 # every surface shows for them. Other roles are shown under their own name.
 ROLE_LABELS = {"declared": "you switch to", "seen": "seen recently"}
 SWITCHED_ROLES = tuple(ROLE_LABELS)
+# The words a finding uses, commas included, to say why a switched route counts.
+_ASIDES = {"declared": ", a model you switch to,", "seen": ", a model seen in recent sessions,"}
 
 
 @dataclass(frozen=True)
@@ -39,12 +41,8 @@ class Route:
 
 
 def switched_aside(route: Route) -> str:
-    """", a model you switch to," style words that tell a finding why a switched route counts."""
-    if route.role == "declared":
-        return ", a model you switch to,"
-    if route.role == "seen":
-        return ", a model seen in recent sessions,"
-    return ""
+    """Words, set off by commas, that tell a finding why a switched route counts; "" for any other route."""
+    return _ASIDES.get(route.role, "")
 
 
 def format_tokens(n: int) -> str:
@@ -173,26 +171,24 @@ def _route(role: str, model: str, provider: str, config: dict, *, ceiling: int |
     )
 
 
-def _identity(model: str, provider: str) -> tuple[str, str]:
+def identity(model: str, provider: str) -> tuple[str, str]:
+    """(model, provider) as Hermes runs them, or as given (provider lower-cased) when Hermes cannot say."""
     try:
         return adapter.runtime_identity(model, provider)
     except adapter.Unresolved:
         return model, (provider or "").strip().lower()
 
 
-def _already_routed(role: str, model: str, provider: str, configured: list[Route]) -> bool:
-    """Whether a configured route already runs this switched model, compared as Hermes runs both.
+def _already_routed(role: str, wanted: tuple[str, str], taken: list[tuple[str, str]]) -> bool:
+    """Whether a route already built runs this switched model, compared as Hermes runs both.
 
     A declared model names its provider, so it is the same route only on an exact match. A seen
     model is what a running agent reported, so a configured route with no provider (or "auto")
     and the same model is that route running.
     """
-    wanted = _identity(model, provider)
-    for route in configured:
-        have = _identity(route.model, route.provider)
-        if have == wanted or (role == "seen" and have[1] in ("", "auto") and have[0] == wanted[0]):
-            return True
-    return False
+    return any(
+        have == wanted or (role == "seen" and have[1] in ("", "auto") and have[0] == wanted[0]) for have in taken
+    )
 
 
 def build_routes(config: dict, switched=()) -> list[Route]:
@@ -216,10 +212,15 @@ def build_routes(config: dict, switched=()) -> list[Route]:
     except adapter.Unresolved:
         child_cap = None
     found.append(_route("delegation", child_model, child_provider, config, ceiling=ceiling, extra_cap=child_cap))
+    # Checked against every route built so far, so a seen model already declared is added once.
+    taken = [identity(r.model, r.provider) for r in found] if switched else []
     for role, model, provider in switched:
-        # Checked against everything built so far, so a seen model already declared is added once.
-        if not model or _already_routed(role, model, provider, found):
+        if not model:
             continue
+        wanted = identity(model, provider)
+        if _already_routed(role, wanted, taken):
+            continue
+        taken.append(wanted)
         found.append(_route(role, model, provider, config, ceiling=ceiling, extra_cap=None))
     if summariser is not None:
         found.append(summariser)

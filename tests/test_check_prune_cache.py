@@ -1,6 +1,7 @@
 """Proactive pruning on a prompt-cached subscription route."""
 
 from checkutil import run_check
+from tuneup import models
 from tuneup.checks.prune_cache import check
 
 
@@ -40,8 +41,6 @@ def test_pruning_off_is_not_reported(make_profile):
 
 
 def test_covers_ae5_two_cached_routes_give_one_finding(make_profile):
-    from tuneup import models
-
     models.declare("claude-subscription-directsdk-experimental", "claude-opus-5-5[1m]")
     found = run_check(
         check,
@@ -53,8 +52,6 @@ def test_covers_ae5_two_cached_routes_give_one_finding(make_profile):
 
 
 def test_pruning_is_reported_for_a_cached_route_you_switch_to(make_profile):
-    from tuneup import models
-
     models.declare("claude-subscription-directsdk-experimental", "claude-opus-5-5[1m]")
     [f] = run_check(
         check,

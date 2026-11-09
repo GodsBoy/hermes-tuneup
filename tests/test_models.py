@@ -96,10 +96,7 @@ def test_seen_models_inside_the_window_count_and_older_ones_do_not(make_profile)
 def test_a_shorter_window_and_zero_days(make_profile):
     home = make_profile("default", CFG)
     models.set_seen_days(2)
-    with sqlite3.connect(_db(home)) as conn:
-        conn.execute("CREATE TABLE models_seen (model TEXT, provider TEXT, last_seen TEXT)")
-        conn.executemany("INSERT INTO models_seen VALUES (?, ?, ?)",
-                         [("claude-opus-5-5", "anthropic", _ago(3)), ("gpt-6.1-sol", "openai-codex", _ago(1))])
+    _seen_rows(home, [("claude-opus-5-5", "anthropic", _ago(3)), ("gpt-6.1-sol", "openai-codex", _ago(1))])
     assert models.read(home).seen == [("openai-codex", "gpt-6.1-sol")]
     models.set_seen_days(0)
     assert models.read(home).seen == []

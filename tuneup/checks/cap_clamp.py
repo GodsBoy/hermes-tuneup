@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..config_access import raw_section
 from ..redact import clean
 from ..report import Finding
-from ..routes import format_tokens, switched_aside
+from ..routes import SWITCHED_ROLES, format_tokens, switched_aside
 from ..severity import effect_timing
 
 KEY = ["compression", "threshold_tokens"]
@@ -15,7 +15,7 @@ def check(snapshot, routes) -> list[Finding]:
     clamped = [
         r
         for r in routes
-        if r.role in ("main", "fallback", "declared", "seen")
+        if r.role in ("main", "fallback", *SWITCHED_ROLES)
         and r.status == "resolved"
         and r.factors.get("cap")
         and r.factors.get("summariser_ceiling") is None

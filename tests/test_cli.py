@@ -6,9 +6,10 @@ import re
 
 import pytest
 
+from checkutil import record_seen
 from conftest import REPO_ROOT
 from fleetutil import CLEAN, busy_fleet
-from tuneup import cli
+from tuneup import cli, models
 
 
 def _run(argv, capsys):
@@ -167,20 +168,9 @@ def test_cli_models_exits_two_on_a_bad_spec_or_unknown_model(make_profile, capsy
 
 
 def test_terminal_report_labels_switched_and_seen_routes(make_profile, capsys):
-    from tuneup import models, receipts
-
-    class _State(dict):
-        def set(self, key, value):
-            self[key] = value
-
-    class _Ctx:
-        state = _State()
-
     make_profile("default", "model: {default: gpt-6.1-sol, provider: openai-codex}\n")
     models.declare("anthropic", "claude-opus-5-5")
-    recorder = receipts.Recorder(_Ctx())
-    recorder.set_enabled(True)
-    recorder.on_api_request(session_id="s1", model="claude-haiku-4-5", provider="anthropic", usage={"prompt_tokens": 1})
+    record_seen("claude-haiku-4-5", "anthropic")
     code, out = _run(["check"], capsys)
     assert "  you switch to: claude-opus-5-5 on anthropic compacts at about" in out
     assert "  seen recently: claude-haiku-4-5 on anthropic compacts at about" in out

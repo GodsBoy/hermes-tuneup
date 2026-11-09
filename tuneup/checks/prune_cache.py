@@ -5,7 +5,7 @@ from __future__ import annotations
 from ..config_access import raw_section, section
 from ..redact import clean
 from ..report import Finding
-from ..routes import switched_aside
+from ..routes import SWITCHED_ROLES, switched_aside
 from ..severity import effect_timing
 
 KEY = ["compression", "proactive_prune_tokens"]
@@ -31,7 +31,7 @@ def check(snapshot, routes) -> list[Finding]:
         return []
     # One profile-wide setting: one finding, naming the first cached route and listing them all.
     cached = [
-        r for r in routes if r.role in ("main", "fallback", "declared", "seen") and is_cached_subscription(r.provider)
+        r for r in routes if r.role in ("main", "fallback", *SWITCHED_ROLES) and is_cached_subscription(r.provider)
     ]
     if not cached:
         return []

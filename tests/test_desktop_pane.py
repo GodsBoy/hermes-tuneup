@@ -10,7 +10,7 @@ import pytest
 
 from conftest import REPO_ROOT
 from fleetutil import busy_fleet
-from tuneup import report
+from tuneup import models, report
 
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="node is not installed")
@@ -79,8 +79,6 @@ def test_other_failures_keep_a_generic_message(tmp_path):
 
 
 def test_pane_labels_the_models_you_switch_to(make_profile, tmp_path):
-    from tuneup import models
-
     make_profile("default", "model: {default: gpt-6.1-sol, provider: openai-codex}\n")
     models.declare("anthropic", "claude-opus-5-5")
     data = report.build_report()
