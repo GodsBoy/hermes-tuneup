@@ -55,7 +55,14 @@ def test_a_spec_parses_to_the_identity_hermes_runs(spec, expected):
     assert models.parse_spec(spec) == expected
 
 
-@pytest.mark.parametrize("spec", ["", "claude-opus-5-5", ":claude-opus-5-5", "anthropic:", "anthropic: claude", "a b:c", "x:" + "m" * 201])
+@pytest.mark.parametrize(
+    "spec",
+    [
+        "", "claude-opus-5-5", ":claude-opus-5-5", "anthropic:", "anthropic: claude", "a b:c", "x:" + "m" * 201,
+        # Terminal control and bidirectional characters, which would be echoed back on every surface.
+        "openai:gpt\x1b]0;pwned\x07", "openai:gpt\x00", "openai:gpt\x9b", "openai:gpt\u202e",
+    ],
+)
 def test_a_bad_spec_is_rejected_with_the_expected_form(spec):
     with pytest.raises(models.SpecError, match="<provider>:<model>"):
         models.parse_spec(spec)

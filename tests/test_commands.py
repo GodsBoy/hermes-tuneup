@@ -1,5 +1,6 @@
 """The /tuneup slash command report."""
 
+from checkutil import record_seen
 from fleetutil import busy_fleet
 from tuneup import commands
 
@@ -65,3 +66,15 @@ def test_chat_report_shows_the_models_you_switch_to(make_profile):
     commands.handle("models add anthropic:claude-opus-5-5", platform="cli")
     out = commands.handle("", platform="cli")
     assert "\nyou switch to: claude-opus-5-5 on anthropic compacts at about" in out
+
+
+def test_many_models_never_push_findings_out_of_a_capped_chat(make_profile):
+    busy_fleet(make_profile, extra=0)
+    for i in range(40):
+        record_seen(f"claude-opus-5-{i}", "anthropic")
+    out = commands.handle("", platform="telegram")
+    assert len(out) <= commands.MESSAGING_CAP
+    assert "[HIGH]" in out and "/tuneup fix " in out
+    assert "more models you switch to or were seen using, run /tuneup models" in out
+    # Without a cap every route is listed.
+    assert out.count("seen recently:") < commands.handle("", platform="cli").count("seen recently:") == 40

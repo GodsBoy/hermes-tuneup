@@ -179,16 +179,14 @@ def identity(model: str, provider: str) -> tuple[str, str]:
         return model, (provider or "").strip().lower()
 
 
-def _already_routed(role: str, wanted: tuple[str, str], taken: list[tuple[str, str]]) -> bool:
+def _already_routed(wanted: tuple[str, str], taken: list[tuple[str, str]]) -> bool:
     """Whether a route already built runs this switched model, compared as Hermes runs both.
 
-    A declared model names its provider, so it is the same route only on an exact match. A seen
-    model is what a running agent reported, so a configured route with no provider (or "auto")
-    and the same model is that route running.
+    Only an exact match counts. A configured route with no provider (or "auto") is not the same
+    route as a model seen on a named provider: the seen route carries the provider Hermes really
+    used, which is what a provider-scoped model_thresholds rule is matched against.
     """
-    return any(
-        have == wanted or (role == "seen" and have[1] in ("", "auto") and have[0] == wanted[0]) for have in taken
-    )
+    return wanted in taken
 
 
 def build_routes(config: dict, switched=()) -> list[Route]:
@@ -218,7 +216,7 @@ def build_routes(config: dict, switched=()) -> list[Route]:
         if not model:
             continue
         wanted = identity(model, provider)
-        if _already_routed(role, wanted, taken):
+        if _already_routed(wanted, taken):
             continue
         taken.append(wanted)
         found.append(_route(role, model, provider, config, ceiling=ceiling, extra_cap=None))

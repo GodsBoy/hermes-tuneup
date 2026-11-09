@@ -180,8 +180,10 @@ def test_a_seen_model_matching_main_as_hermes_runs_it_adds_nothing():
     # Hermes runs anthropic's claude-opus-4.5 as claude-opus-4-5, and receipts record that name.
     cfg = _cfg("model: {default: claude-opus-4.5, provider: anthropic}\n")
     assert [r.role for r in routes.build_routes(cfg, [("seen", "claude-opus-4-5", "anthropic")])] == ["main", "delegation"]
+    # A main route with no provider is kept apart: the seen route shows the provider Hermes really used.
     blank = _cfg("model: claude-opus-5-5\n")
-    assert [r.role for r in routes.build_routes(blank, [("seen", "claude-opus-5-5", "anthropic")])] == ["main", "delegation"]
+    found = routes.build_routes(blank, [("seen", "claude-opus-5-5", "anthropic")])
+    assert [(r.role, r.provider) for r in found] == [("main", ""), ("delegation", ""), ("seen", "anthropic")]
 
 
 def test_format_tokens():

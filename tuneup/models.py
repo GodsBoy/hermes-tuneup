@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from .receipts import PLUGIN, db_path, has_table
+from .redact import clean
 from .routes import SWITCHED_ROLES, identity
 
 DEFAULT_DAYS = 30
@@ -51,7 +52,9 @@ def parse_spec(text: str) -> tuple[str, str]:
     model_thresholds key, then normalised the way Hermes normalises the route it runs."""
     raw = (text or "").strip()
     provider, sep, model = raw.partition(":")
-    if not (sep and provider and model) or len(raw) > MAX_SPEC or any(c.isspace() for c in raw):
+    # Printable and without spaces: a spec is shown back on every surface, so no control,
+    # escape or bidirectional character may get in.
+    if not (sep and provider and model) or len(raw) > MAX_SPEC or not raw.isprintable() or any(c.isspace() for c in raw):
         raise SpecError(f"Expected {SPEC_FORM}.")
     return _spec_identity(model, provider)
 
@@ -165,7 +168,8 @@ def switched_for(profile_dir: Path) -> list[tuple[str, str, str]]:
 
 
 def _spec(provider: str, model: str) -> str:
-    return f"{provider}:{model}"
+    """A model as "<provider>:<model>" for display; values read from the database are cleaned first."""
+    return clean(f"{provider}:{model}")
 
 
 def _listing(known: Known, prefix: str, profile: str) -> str:
@@ -209,8 +213,8 @@ def _change(action: str, value: str, profile: str) -> tuple[bool, str]:
     if not declare(provider, model):
         return True, f"{spec} is already declared for profile {profile}."
     text = f"Declared {spec} for profile {profile}. tuneup now checks it as a model you switch to."
-    if spec != value.strip():
-        text += f" That is how Hermes runs {value.strip()}."
+    if f"{provider}:{model}" != value.strip():
+        text += f" That is how Hermes runs {clean(value)}."
     return True, text
 
 

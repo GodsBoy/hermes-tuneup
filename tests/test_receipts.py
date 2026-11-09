@@ -217,7 +217,9 @@ def _v2_database(home):
     return _db(home)
 
 
-def test_each_request_records_its_model_as_seen(make_profile):
+def test_each_request_records_its_model_as_seen(make_profile, monkeypatch):
+    clock = iter(f"2026-11-09T10:00:{s:02d}+00:00" for s in range(60))
+    monkeypatch.setattr(receipts, "_now", lambda: next(clock))
     home = make_profile("default", CFG)
     rec = receipts.Recorder(Ctx())
     rec.set_enabled(True)
@@ -227,7 +229,7 @@ def test_each_request_records_its_model_as_seen(make_profile):
     rec.on_api_request(session_id="s1", model="gpt-6.1-sol", provider="openai-codex", usage=_usage())
     rows = {(r["model"], r["provider"]): r for r in _rows(home, "models_seen")}
     assert set(rows) == {("claude-opus-5-5", "anthropic"), ("gpt-6.1-sol", "openai-codex")}
-    assert rows[("claude-opus-5-5", "anthropic")]["last_seen"] >= first["last_seen"]
+    assert rows[("claude-opus-5-5", "anthropic")]["last_seen"] > first["last_seen"]
     # The session row keeps only its latest model; the switch away from Claude is still known.
     [session] = _rows(home, "sessions")
     assert session["model"] == "gpt-6.1-sol"

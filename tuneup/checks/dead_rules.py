@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from .. import hermes_adapter as adapter
 from ..config_access import raw_section
 from ..redact import clean
@@ -11,6 +13,9 @@ from ..severity import effect_timing
 
 KEY = ["compression", "model_thresholds"]
 CAVEAT = "cron jobs are not checked"
+# A provider id as Hermes spells one. Only such a scope from config.yaml goes into a printed command,
+# because a person may paste that command into a shell.
+_PROVIDER_ID = re.compile(r"[a-z0-9][a-z0-9._-]*")
 # Configured routes plus the models the profile switches to: a rule matching any of them is used.
 CANDIDATE_ROLES = ("main", "fallback", "delegation", *SWITCHED_ROLES)
 
@@ -84,12 +89,14 @@ def check(snapshot, routes) -> list[Finding]:
         proposed = {k: v for k, v in rules.items() if k != key}
         if target is not None:
             scope, _, substr = str(key).partition(":")
+            scope_id = scope.strip().lower()
+            spec = f"{scope_id}:<model>" if _PROVIDER_ID.fullmatch(scope_id) else "<provider>:<model>"
             proposed[f"{target.provider}:{substr}"] = value
             reason = (
                 f"rule '{clean(key)}' never applies: no route runs on that provider. It matches "
                 f"{clean(target.model)}{switched_aside(target)} on {clean(target.provider)}, so rescope it to that "
                 f"provider. If you also switch to a model on {clean(scope.strip())}, declare it instead: "
-                f"{_declare_hint(snapshot.name, clean(scope.strip().lower()) + ':<model>')}."
+                f"{_declare_hint(snapshot.name, spec)}."
             )
         else:
             reason = (
