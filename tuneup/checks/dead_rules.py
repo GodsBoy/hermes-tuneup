@@ -5,12 +5,14 @@ from __future__ import annotations
 from .. import hermes_adapter as adapter
 from ..config_access import raw_section
 from ..redact import clean
-from ..report import Finding
-from ..routes import format_tokens
+from ..report import Finding, hermes_command
+from ..routes import format_tokens, switched_aside
 from ..severity import effect_timing
 
 KEY = ["compression", "model_thresholds"]
-CAVEAT = "cron jobs and /model switches are not checked"
+CAVEAT = "cron jobs are not checked"
+# Configured routes plus the models the profile switches to: a rule matching any of them is used.
+CANDIDATE_ROLES = ("main", "fallback", "delegation", "declared", "seen")
 
 
 def _flatten(rules: dict) -> dict:
@@ -38,6 +40,13 @@ def _rescope_target(key: str, routes):
     return None
 
 
+def _declare_hint(profile: str, spec: str) -> str:
+    """How to declare a model in the finding's own profile. A check cannot know which surface or
+    profile will show the finding, so it names both forms for that profile."""
+    command = hermes_command(profile, f"tuneup models add {spec}")
+    return f"{command} in a terminal, or /tuneup models add {spec} in a chat for that profile"
+
+
 def _main_trigger_text(routes) -> str:
     main = next((r for r in routes if r.role == "main" and r.trigger), None)
     return f" The main route ({clean(main.model)}) compacts at about {format_tokens(main.trigger)}." if main else ""
@@ -47,7 +56,7 @@ def check(snapshot, routes) -> list[Finding]:
     rules = raw_section(snapshot, "compression", "model_thresholds")
     if not rules:
         return []
-    candidates = [r for r in routes if r.role in ("main", "fallback", "delegation") and r.model]
+    candidates = [r for r in routes if r.role in CANDIDATE_ROLES and r.model]
     findings: list[Finding] = []
     nested = {k: v for k, v in rules.items() if isinstance(v, dict)}
     if nested:
@@ -74,16 +83,19 @@ def check(snapshot, routes) -> list[Finding]:
         target = _rescope_target(str(key), candidates)
         proposed = {k: v for k, v in rules.items() if k != key}
         if target is not None:
-            substr = str(key).partition(":")[2]
+            scope, _, substr = str(key).partition(":")
             proposed[f"{target.provider}:{substr}"] = value
             reason = (
                 f"rule '{clean(key)}' never applies: no route runs on that provider. It matches "
-                f"{clean(target.model)} on {clean(target.provider)}, so rescope it to that provider."
+                f"{clean(target.model)}{switched_aside(target)} on {clean(target.provider)}, so rescope it to that "
+                f"provider. If you also switch to a model on {clean(scope.strip())}, declare it instead: "
+                f"{_declare_hint(snapshot.name, clean(scope.strip().lower()) + ':<model>')}."
             )
         else:
             reason = (
-                f"rule '{clean(key)}' matches none of the configured main, fallback, delegation or summariser "
-                f"routes ({CAVEAT}). Remove it unless you rely on it for a model you switch to."
+                f"rule '{clean(key)}' matches none of this profile's configured routes, the models declared "
+                f"for it or the models seen in its recent sessions ({CAVEAT}). If it is for a model you switch "
+                f"to, declare that model: {_declare_hint(snapshot.name, '<provider>:<model>')}. Otherwise remove it."
             )
         findings.append(
             Finding(

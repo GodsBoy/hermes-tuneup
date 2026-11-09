@@ -56,3 +56,21 @@ def test_a_large_summariser_has_no_finding(make_profile):
         """,
     )
     assert found == []
+
+
+def test_a_summariser_that_lowers_only_a_route_you_switch_to_is_reported(make_profile):
+    from tuneup import models
+
+    models.declare("anthropic", "claude-opus-5-5")
+    found = run_check(
+        check,
+        make_profile,
+        """
+        model: {default: claude-haiku-4-5, provider: anthropic}
+        compression: {threshold: 0.5}
+        auxiliary: {compression: {provider: openai-codex, model: gpt-6.1-sol}}
+        """,
+    )
+    [f] = found
+    assert f.severity == "medium"
+    assert "lowers compaction on claude-opus-5-5, a model you switch to, from about 500K to 272K" in f.summary
