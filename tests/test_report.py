@@ -105,3 +105,24 @@ def test_a_check_module_that_fails_to_import_raises_instead_of_reporting_no_find
         report.default_checks()
     with pytest.raises(ImportError):
         report.build_report(active="default")
+
+
+SWITCHER = """
+model: {default: gpt-6.1-sol, provider: openai-codex}
+compression:
+  model_thresholds: {"anthropic:claude-opus": 0.8, "llama-9": 0.7}
+"""
+
+
+def test_declared_models_are_routes_in_the_report_and_in_the_fix_lookup(make_profile):
+    from tuneup import models, profiles
+
+    make_profile("default", SWITCHER)
+    models.declare("anthropic", "claude-opus-5-5")
+    entry = report.build_report(active="default")["profiles"][0]
+    declared = [r for r in entry["routes"] if r["role"] == "declared"]
+    assert [(r["model"], r["provider"], r["label"]) for r in declared] == [("claude-opus-5-5", "anthropic", "you switch to")]
+    # The fix flow finds findings through findings_for, so it must see the same routes and codes.
+    fix_side = report.findings_for(profiles.find_profile("default"), "default")
+    assert sorted(f["code"] for f in entry["findings"]) == sorted(f.code for f in fix_side)
+    assert [r["role"] for r in entry["routes"]] == ["main", "delegation", "declared"]
