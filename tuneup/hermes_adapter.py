@@ -266,8 +266,53 @@ def rule_rank(key: str, model: str, provider: str) -> tuple[int, int] | None:
     return _model_threshold_key_rank(str(key), model or "", (provider or "").strip().lower())
 
 
+def _bedrock_window(model: str) -> Window | None:
+    """A Bedrock model's window from Hermes' offline table, or None when that table is unavailable.
+
+    Hermes' full lookup finds a Bedrock window by sending oversized prompts with the machine's AWS
+    credentials. A read-only report must never do that, so Bedrock routes stop at the table Hermes
+    itself falls back to, and an unknown model is reported as assumed.
+    """
+    try:
+        from agent.bedrock_adapter import BEDROCK_DEFAULT_CONTEXT_LENGTH, bedrock_static_context_length
+    except Exception:  # Hermes skips Bedrock entirely when its adapter cannot be imported
+        return None
+    try:
+        known = bedrock_static_context_length(model)
+    except Exception:
+        known = None
+    if isinstance(known, int) and known > 0:
+        return Window(tokens=known, source="hermes", assumed=False)
+    return Window(tokens=int(BEDROCK_DEFAULT_CONTEXT_LENGTH), source="fallback", assumed=True)
+
+
+def _moa_aggregator(config: dict, preset: str) -> tuple[str, str] | None:
+    """(model, provider) of the aggregator behind a Mixture of Agents preset, or None if it has none.
+
+    Hermes' full lookup resolves the aggregator's base URL and API key and probes with them. tuneup
+    reads the preset from config alone, so the aggregator is priced like any other route, without a key.
+    """
+    try:
+        from hermes_cli.moa_config import resolve_moa_preset
+
+        aggregator = resolve_moa_preset(config.get("moa") or {}, preset).get("aggregator") or {}
+    except Exception:
+        return None
+    provider = str(aggregator.get("provider") or "").strip()
+    model = str(aggregator.get("model") or "").strip()
+    if not model or not provider or provider.lower() == "moa":
+        return None
+    return model, provider
+
+
 def resolve_window(config: dict, model: str, provider: str, *, main_route: bool = True) -> Window:
-    """The route's context window, resolved offline (no base URL or key is ever passed)."""
+    """The route's context window. No base URL or key is ever passed, so no request carries credentials.
+
+    Most routes are resolved from what Hermes ships. For OpenRouter and Nous routes, and for a route
+    with no provider, Hermes' lookup may fetch OpenRouter's public model list; for Novita, Novita's.
+    Bedrock and Mixture of Agents routes never reach that lookup: Hermes would probe AWS, or resolve
+    the aggregator's key, to answer them.
+    """
     _require()
     from agent.model_metadata import (
         DEFAULT_CONTEXT_LENGTHS,
@@ -295,6 +340,15 @@ def resolve_window(config: dict, model: str, provider: str, *, main_route: bool 
                 pin, source = int(found), "custom provider"
         except Exception:
             pin = None
+    if pin is None and (provider or "") == "bedrock":
+        bedrock = _bedrock_window(model)
+        if bedrock is not None:
+            return bedrock
+    if pin is None and (provider or "").strip().lower() == "moa":
+        aggregator = _moa_aggregator(config, model)
+        if aggregator is None:
+            return Window(tokens=int(DEFAULT_FALLBACK_CONTEXT), source="fallback", assumed=True)
+        return resolve_window(config, *runtime_identity(*aggregator), main_route=False)
     with isolated_home():
         tokens = int(
             get_model_context_length(

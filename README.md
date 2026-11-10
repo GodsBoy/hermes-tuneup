@@ -10,8 +10,8 @@
 <p align="center">
   <a href="https://github.com/GodsBoy/hermes-tuneup/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/GodsBoy/hermes-tuneup/ci.yml?branch=main&style=for-the-badge&label=CI&labelColor=0B0C0E" alt="CI"></a>
   <a href="https://github.com/NousResearch/hermes-agent"><img src="https://img.shields.io/badge/Hermes_Agent-plugin-FFDE1A?style=for-the-badge&labelColor=0B0C0E" alt="Hermes Agent plugin"></a>
-  <img src="https://img.shields.io/badge/version-0.1.0-E5DEC9?style=for-the-badge&labelColor=0B0C0E" alt="Version 0.1.0">
-  <img src="https://img.shields.io/badge/network_calls-none-1F3FD6?style=for-the-badge&labelColor=0B0C0E" alt="No network calls">
+  <img src="https://img.shields.io/badge/version-0.1.1-E5DEC9?style=for-the-badge&labelColor=0B0C0E" alt="Version 0.1.1">
+  <img src="https://img.shields.io/badge/writes-only_when_you_confirm-1F3FD6?style=for-the-badge&labelColor=0B0C0E" alt="Writes only when you confirm">
   <img src="https://img.shields.io/badge/credentials-none_needed-1F3FD6?style=for-the-badge&labelColor=0B0C0E" alt="No credentials needed">
   <a href="LICENSE"><img src="https://img.shields.io/badge/licence-MIT-E62B28?style=for-the-badge&labelColor=0B0C0E" alt="MIT licence"></a>
 </p>
@@ -40,7 +40,7 @@ hermes plugins install GodsBoy/hermes-tuneup --enable
 hermes gateway restart
 ```
 
-Then type `/tuneup` in any chat, or ask Hermes "Why did my quota vanish?". tuneup needs no credentials, settings or network access.
+Then type `/tuneup` in any chat, or ask Hermes "Why did my quota vanish?". tuneup needs no credentials or settings.
 
 | Where | What you get |
 |---|---|
@@ -142,7 +142,11 @@ tuneup: profile work, gpt-6.1-sol on openai-codex compacts at about 231K tokens 
 
 ## How the numbers are computed
 
-tuneup builds the compressor exactly the way Hermes builds a session's compressor, from Hermes' own compression-config parser, and asks it for the trigger. Context windows come from Hermes' own window lookup, offline: tuneup never passes a base URL or an API key, so a lookup never touches the network. When Hermes does not know a model and falls back to its default window, tuneup marks that window as assumed and tells you which setting pins it (`model.context_length`).
+tuneup builds the compressor exactly the way Hermes builds a session's compressor, from Hermes' own compression-config parser, and asks it for the trigger. Context windows come from Hermes' own window lookup. tuneup never passes it a base URL or an API key, so no lookup carries credentials. Most routes are answered from what Hermes ships. On three kinds of route Hermes may fetch a public model list: OpenRouter's (`openrouter.ai`) for OpenRouter and Nous routes and for a route with no provider, and Novita's (`api.novita.ai`) for Novita routes. If that fetch fails, Hermes uses its built-in defaults.
+
+Two kinds of route never reach that lookup, because Hermes would use your credentials to answer them. For Bedrock, Hermes finds a window by sending oversized prompts with the machine's AWS credentials, so tuneup reads Hermes' offline Bedrock table. For a Mixture of Agents preset, Hermes resolves the aggregator's API key and probes with it, so tuneup reads the aggregator from the preset and prices it like any other route.
+
+When Hermes does not know a model and falls back to its default window, tuneup marks that window as assumed and tells you which setting pins it (`model.context_length`).
 
 Reads never change a profile. Each read runs in a private temporary Hermes home holding copies of the few files Hermes needs, because Hermes' own loaders write a backup into whichever home they read.
 
@@ -170,7 +174,7 @@ The comparison uses the request size because that is what Hermes compacts on: th
 
 ## Disclosure
 
-Reads every Hermes profile's `config.yaml`, read-only, through Hermes' own loader on a temporary copy. Writes a profile's `config.yaml` only when you confirm a fix, after saving a backup under that profile's `backups/config`. Keeps the models you declare, and, when you turn receipts on, compaction, cache and model-use metadata (never message content), in its own `plugin-data` folder. Imports undocumented Hermes resolver modules from one adapter file, so `hermes plugins validate` shows catalogue rule 9 warnings. Makes no network calls, needs no credentials, and runs no shell commands or background processes.
+Reads every Hermes profile's `config.yaml`, read-only, through Hermes' own loader on a temporary copy. Writes a profile's `config.yaml` only when you confirm a fix, after saving a backup under that profile's `backups/config`. Keeps the models you declare, and, when you turn receipts on, compaction, cache and model-use metadata (never message content), in its own `plugin-data` folder. Imports undocumented Hermes resolver modules from one adapter file, so `hermes plugins validate` shows catalogue rule 9 warnings. Needs no credentials and never sends any: it gives Hermes no key and no base URL. Makes no network calls of its own. For OpenRouter and Nous routes, and for a route with no provider, Hermes' window lookup may fetch OpenRouter's public model list (`openrouter.ai`); for Novita routes, Novita's (`api.novita.ai`). Runs no shell commands or background processes.
 
 ## Why `hermes plugins validate` warns
 

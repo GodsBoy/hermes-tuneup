@@ -28,9 +28,23 @@ def no_network(monkeypatch):
         attempts.append(args)
         raise OSError("network blocked by test")
 
+    def _blocked_lookup(host, *args, **kwargs):
+        attempts.append(("lookup", host))
+        raise socket.gaierror("name lookup blocked by test")
+
     monkeypatch.setattr(socket.socket, "connect", _blocked)
     monkeypatch.setattr(socket, "create_connection", _blocked)
+    monkeypatch.setattr(socket, "getaddrinfo", _blocked_lookup)
     return attempts
+
+
+def _hosts(attempts) -> set[str]:
+    """The host of every connection or name lookup the code under test attempted."""
+    found = set()
+    for attempt in attempts:
+        target = attempt[1] if attempt and attempt[0] == "lookup" else attempt[0]
+        found.add(str(target[0] if isinstance(target, tuple) else target))
+    return found
 
 
 def _hermes_trigger(config: dict, model: str, provider: str, window: int) -> int:
@@ -102,6 +116,130 @@ def test_window_resolution_is_offline_and_matches_hermes(no_network):
         assert window.tokens == expected
         assert window.assumed is False
     assert no_network == []
+
+
+# Routes whose window Hermes resolves from what it ships: no connection and no name lookup.
+OFFLINE_ROUTES = [
+    ("claude-opus-5-5[1m]", "claude-subscription-directsdk-experimental"),
+    ("claude-opus-5-5", "anthropic"),
+    ("gpt-6.1-sol", "openai-codex"),
+    ("gpt-5.5", "openai"),
+    ("gemini-3-pro", "gemini"),
+    ("gpt-5.5", "copilot"),
+    ("grok-5", "xai"),
+    ("deepseek-chat", "deepseek"),
+    ("llama3.3:70b", "ollama"),
+    ("anthropic.claude-opus-5-5-v1:0", "bedrock"),
+    ("some-model-nobody-ships", "bedrock"),
+    ("totally-unknown-model-x", "custom"),
+    ("mystery-model", "some-new-provider"),
+    ("gpt-5.5", "azure"),
+    ("glm-5", "zai"),
+    ("llama-4-70b", "groq"),
+    ("anthropic/claude-opus-5.5", "ai-gateway"),
+]
+
+# Routes where Hermes' own lookup may ask for a public model list. tuneup passes no base URL and
+# no key, so the request carries no credentials; the README names these hosts.
+PUBLIC_LIST_ROUTES = [
+    ("deepseek/deepseek-chat", "openrouter", "openrouter.ai"),
+    ("anthropic/claude-opus-5.5", "openrouter", "openrouter.ai"),
+    ("hermes-4-405b", "nous", "openrouter.ai"),
+    ("totally-unknown-model-x", "", "openrouter.ai"),
+    ("deepseek/deepseek-v3", "novita", "api.novita.ai"),
+]
+
+
+@pytest.mark.parametrize("model, provider", OFFLINE_ROUTES)
+def test_window_lookup_stays_off_the_network(no_network, model, provider):
+    window = adapter.resolve_window({}, model, provider, main_route=False)
+    assert window.tokens > 0
+    assert no_network == []
+
+
+@pytest.mark.parametrize("model, provider, allowed_host", PUBLIC_LIST_ROUTES)
+def test_window_lookup_only_asks_the_disclosed_public_list(no_network, model, provider, allowed_host):
+    window = adapter.resolve_window({}, model, provider, main_route=False)
+    assert window.tokens > 0
+    assert _hosts(no_network) <= {allowed_host}
+
+
+def test_bedrock_window_comes_from_the_static_table_without_a_probe(no_network, monkeypatch):
+    """Hermes' full lookup probes Bedrock with the machine's AWS credentials; tuneup must not."""
+    bedrock = pytest.importorskip("agent.bedrock_adapter")
+    probed = []
+    monkeypatch.setattr(bedrock, "probe_bedrock_context_length", lambda *a, **k: probed.append(a) or None)
+    monkeypatch.setattr(bedrock, "_get_bedrock_runtime_client", lambda *a, **k: probed.append(a))
+
+    known = adapter.resolve_window({}, "anthropic.claude-opus-5-5-v1:0", "bedrock", main_route=False)
+    assert known.tokens == bedrock.bedrock_static_context_length("anthropic.claude-opus-5-5-v1:0")
+    assert known.assumed is False
+
+    unknown = adapter.resolve_window({}, "some-model-nobody-ships", "bedrock", main_route=False)
+    assert unknown.tokens == bedrock.BEDROCK_DEFAULT_CONTEXT_LENGTH
+    assert unknown.assumed is True
+    assert unknown.source == "fallback"
+
+    assert probed == []
+    assert no_network == []
+
+
+def test_bedrock_config_pin_still_wins(no_network):
+    window = adapter.resolve_window(
+        {"model": {"context_length": 400_000}}, "anthropic.claude-opus-5-5-v1:0", "bedrock"
+    )
+    assert (window.tokens, window.source, window.assumed) == (400_000, "config", False)
+    assert no_network == []
+
+
+def _moa_config(provider: str, model: str) -> dict:
+    return {
+        "moa": {
+            "default_preset": "duo",
+            "presets": {
+                "duo": {
+                    "aggregator": {"provider": provider, "model": model},
+                    "references": [{"provider": "openai-codex", "model": "gpt-6.1-sol"}],
+                }
+            },
+        }
+    }
+
+
+def test_moa_window_is_the_aggregators_and_resolves_no_key(no_network, monkeypatch):
+    """Hermes' full lookup resolves the aggregator's API key and probes with it; tuneup must not."""
+    import hermes_cli.runtime_provider as runtime_provider
+
+    resolved = []
+    monkeypatch.setattr(
+        runtime_provider, "resolve_runtime_provider", lambda *a, **k: resolved.append((a, k)) or {}
+    )
+    window = adapter.resolve_window(_moa_config("anthropic", "claude-opus-5-5"), "duo", "moa", main_route=False)
+    expected = adapter.resolve_window({}, "claude-opus-5-5", "anthropic", main_route=False)
+    assert window == expected
+    assert window.assumed is False
+    assert resolved == []
+    assert no_network == []
+
+
+def test_unknown_moa_preset_is_marked_assumed(no_network):
+    for config in ({}, _moa_config("anthropic", "claude-opus-5-5")):
+        window = adapter.resolve_window(config, "no-such-preset", "moa", main_route=False)
+        assert (window.source, window.assumed) == ("fallback", True)
+    assert no_network == []
+
+
+def test_moa_preset_with_a_broken_aggregator_uses_the_one_hermes_substitutes(no_network):
+    from hermes_cli.moa_config import resolve_moa_preset
+
+    for config in (_moa_config("moa", "duo"), _moa_config("", "")):
+        substituted = resolve_moa_preset(config["moa"], "duo")["aggregator"]
+        window = adapter.resolve_window(config, "duo", "moa", main_route=False)
+        expected = adapter.resolve_window(
+            {}, *adapter.runtime_identity(substituted["model"], substituted["provider"]), main_route=False
+        )
+        assert window == expected
+    assert _hosts(no_network) <= {"openrouter.ai"}
 
 
 def test_unknown_model_window_is_marked_assumed(no_network):
